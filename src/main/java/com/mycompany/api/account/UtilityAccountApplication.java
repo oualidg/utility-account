@@ -12,8 +12,19 @@ package com.mycompany.api.account;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.retry.annotation.EnableRetry;
 
+/**
+ * Main Spring Boot application class for Utility Account API.
+ *
+ * @EnableRetry - Enables Spring Retry for handling transient failures (e.g., ID collisions)
+ *
+ * Note: Timestamp auditing uses JPA lifecycle callbacks (@PrePersist, @PreUpdate) in entities
+ *
+ * @author Oualid Gharach
+ */
 @SpringBootApplication
+@EnableRetry
 public class UtilityAccountApplication {
 
     public static void main(String[] args) {

@@ -1,0 +1,70 @@
+databaseChangeLog:
+  - changeSet:
+      id: 001-create-customers-table
+      author: oualid.gharach
+      changes:
+        - createTable:
+            tableName: customers
+            columns:
+              # Primary Key: 8-digit Luhn customer ID
+              - column:
+                  name: customer_id
+                  type: BIGINT
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+
+              # Customer Information
+              - column:
+                  name: first_name
+                  type: VARCHAR(50)
+                  constraints:
+                    nullable: false
+
+              - column:
+                  name: last_name
+                  type: VARCHAR(50)
+                  constraints:
+                    nullable: false
+
+              - column:
+                  name: email
+                  type: VARCHAR(100)
+                  constraints:
+                    nullable: false
+                    unique: true
+
+              - column:
+                  name: mobile_number
+                  type: VARCHAR(15)
+                  constraints:
+                    nullable: false
+
+              # Audit Timestamps
+              - column:
+                  name: created_at
+                  type: TIMESTAMP
+                  constraints:
+                    nullable: false
+
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP
+                  constraints:
+                    nullable: false
+
+        # Index on email for faster lookups
+        - createIndex:
+            indexName: idx_customers_email
+            tableName: customers
+            columns:
+              - column:
+                  name: email
+
+        # Index on mobile_number for search functionality
+        - createIndex:
+            indexName: idx_customers_mobile
+            tableName: customers
+            columns:
+              - column:
+                  name: mobile_number
