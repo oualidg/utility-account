@@ -10,15 +10,16 @@
  */
 package com.mycompany.api.account.mapper;
 
-import com.mycompany.api.account.dto.CreateCustomerRequest;
-import com.mycompany.api.account.dto.CustomerResponse;
-import com.mycompany.api.account.dto.UpdateCustomerRequest;
+import com.mycompany.api.account.dto.*;
+import com.mycompany.api.account.entity.Account;
 import com.mycompany.api.account.entity.Customer;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.mapstruct.MappingTarget;
 import org.mapstruct.Named;
 import org.mapstruct.NullValuePropertyMappingStrategy;
+
+import java.util.List;
 
 /**
  * MapStruct mapper for Customer entity and DTOs.
@@ -29,7 +30,8 @@ import org.mapstruct.NullValuePropertyMappingStrategy;
  */
 @Mapper(
         componentModel = "spring",
-        nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE
+        nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE,
+        uses = {AccountMapper.class}
 )
 public interface CustomerMapper {
 
@@ -41,6 +43,8 @@ public interface CustomerMapper {
      * @return the customer entity
      */
     @Mapping(target = "customerId", ignore = true)
+    @Mapping(target = "active", ignore = true)
+    @Mapping(target = "accounts", ignore = true)
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)
     @Mapping(target = "firstName", source = "firstName", qualifiedByName = "normalizeString")
@@ -50,12 +54,23 @@ public interface CustomerMapper {
     Customer toEntity(CreateCustomerRequest request);
 
     /**
-     * Map Customer entity to CustomerResponse DTO.
-     *
-     * @param customer the customer entity
-     * @return the customer response
+     * Map Customer entity to CustomerDetailedResponse (includes accounts).
      */
-    CustomerResponse toResponse(Customer customer);
+    @Mapping(target = "accounts", source = "customer.accounts")
+    CustomerDetailedResponse toDetailedResponse(Customer customer);
+
+    /**
+     * Map Customer with newly created account.
+     * Wraps account in a list for the accounts field.
+     */
+    @Mapping(target = "accounts", source = "accounts")
+    CustomerDetailedResponse toDetailedResponse(Customer customer, List<Account> accounts);
+
+    /**
+     * Maps a Customer entity to a lightweight Summary Response.
+     * Used for search results and large lists to improve performance.
+     */
+    CustomerSummaryResponse toSummaryResponse(Customer customer);
 
     /**
      * Update existing Customer entity with values from UpdateCustomerRequest.
@@ -65,6 +80,8 @@ public interface CustomerMapper {
      * @param customer the existing customer to update
      */
     @Mapping(target = "customerId", ignore = true)
+    @Mapping(target = "active", ignore = true)
+    @Mapping(target = "accounts", ignore = true)
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)
     @Mapping(target = "firstName", source = "firstName", qualifiedByName = "normalizeString")
@@ -100,7 +117,6 @@ public interface CustomerMapper {
     /**
      * Normalize mobile number: remove spaces, dashes, parentheses, and trim.
      * Returns null if input is null.
-     *
      * Example: "+27 (82) 123-4567" becomes "+27821234567"
      *
      * @param mobile the mobile number to normalize

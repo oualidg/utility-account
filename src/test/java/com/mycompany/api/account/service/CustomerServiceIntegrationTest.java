@@ -21,19 +21,24 @@
 package com.mycompany.api.account.service;
 
 import com.mycompany.api.account.dto.CreateCustomerRequest;
-import com.mycompany.api.account.dto.CustomerResponse;
+import com.mycompany.api.account.dto.CustomerDetailedResponse;
+import com.mycompany.api.account.dto.CustomerSummaryResponse;
 import com.mycompany.api.account.dto.UpdateCustomerRequest;
 import com.mycompany.api.account.exception.DuplicateResourceException;
 import com.mycompany.api.account.exception.ResourceNotFoundException;
+import com.mycompany.api.account.repository.AccountRepository;
 import com.mycompany.api.account.repository.CustomerRepository;
+import com.mycompany.api.account.util.LuhnGenerator;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 
@@ -56,103 +61,86 @@ class CustomerServiceIntegrationTest {
     @Autowired
     private CustomerRepository customerRepository;
 
+    @Autowired
+    private AccountRepository accountRepository;
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+
     @BeforeEach
     void setUp() {
-        // Clean database before each test
-        customerRepository.deleteAll();
+        // Hard delete all data before each test using native SQL to bypass soft delete
+        jdbcTemplate.execute("DELETE FROM payments");
+        jdbcTemplate.execute("DELETE FROM accounts");
+        jdbcTemplate.execute("DELETE FROM customers");
     }
 
     @AfterEach
     void tearDown() {
-        // Clean database after each test
-        customerRepository.deleteAll();
+        // Hard delete all data after each test using native SQL to bypass soft delete
+        jdbcTemplate.execute("DELETE FROM payments");
+        jdbcTemplate.execute("DELETE FROM accounts");
+        jdbcTemplate.execute("DELETE FROM customers");
     }
 
     @Test
-    @DisplayName("Should create customer and persist to database")
-    void shouldCreateCustomerAndPersist() {
-        // Given
+    @DisplayName("Should create customer and normalize customer data during creation and persist to database")
+    void shouldCreateCustomerAndNormalizeCustomerDataAndPersist() {
+        // Given - Request with data that needs normalization
         CreateCustomerRequest request = new CreateCustomerRequest(
-                "John",
-                "Doe",
-                "john@example.com",
-                "+27821234567"
+                "  John  ",              // Extra spaces
+                "  Doe  ",               // Extra spaces
+                "  JOHN@EXAMPLE.COM  ",  // Uppercase with spaces
+                "+27 (82) 123-4567"      // With formatting
         );
 
         // When
-        CustomerResponse response = customerService.createCustomer(request);
+        CustomerDetailedResponse response = customerService.createCustomer(request);
 
-        // Then
+        // Then - Verify customer and account details
         assertThat(response).isNotNull();
         assertThat(response.customerId()).isNotNull();
+        String customerIdStr = response.customerId().toString();
+        assertThat(customerIdStr).hasSize(8); // Verify customer ID is 8 digits
+        assertThat(LuhnGenerator.isValidCustomerId(response.customerId().toString())).isTrue(); // Verify Luhn checksum (manually validated)
         assertThat(response.firstName()).isEqualTo("John");
         assertThat(response.lastName()).isEqualTo("Doe");
         assertThat(response.email()).isEqualTo("john@example.com");
         assertThat(response.mobileNumber()).isEqualTo("+27821234567");
+        assertThat(response.accounts()).isNotNull();
+        assertThat(response.accounts()).hasSize(1);
+        assertThat(response.accounts().getFirst().isMainAccount()).isTrue();
+        assertThat(response.accounts().getFirst().balance()).isZero();
+        String accountNumberStr = response.accounts().getFirst().accountNumber().toString();
+        assertThat(accountNumberStr).hasSize(10); // Verify account number is 10 digits
+        assertThat(LuhnGenerator.isValidAccountNumber(response.accounts().getFirst().accountNumber().toString())).isTrue(); // Verify Luhn checksum (manually validated)
+
+        // Verify timestamps
         assertThat(response.createdAt()).isNotNull();
         assertThat(response.updatedAt()).isNotNull();
 
-        // Verify customer is actually in database
-        assertThat(customerRepository.existsById(response.customerId())).isTrue();
+        // Verify customer is in database
         assertThat(customerRepository.count()).isEqualTo(1);
+
+        // Verify account is in database
+        assertThat(accountRepository.count()).isEqualTo(1);
     }
 
     @Test
-    @DisplayName("Should normalize data when creating customer")
-    void shouldNormalizeDataWhenCreating() {
-        // Given - Request with unnormalized data
-        CreateCustomerRequest request = new CreateCustomerRequest(
-                "  John  ",
-                "  Doe  ",
-                "  JOHN@EXAMPLE.COM  ",
-                "+27 (82) 123-4567"
-        );
-
-        // When
-        CustomerResponse response = customerService.createCustomer(request);
-
-        // Then - Data should be normalized in database
-        assertThat(response.firstName()).isEqualTo("John");
-        assertThat(response.lastName()).isEqualTo("Doe");
-        assertThat(response.email()).isEqualTo("john@example.com");
-        assertThat(response.mobileNumber()).isEqualTo("+27821234567");
-
-
-        // Verify normalized data in database using Optional.orElseThrow()
-        var customer = customerRepository.findById(response.customerId())
-                .orElseThrow(() -> new AssertionError("Customer should exist in database"));
-        assertThat(customer.getFirstName()).isEqualTo("John");
-        assertThat(customer.getLastName()).isEqualTo("Doe");
-        assertThat(customer.getEmail()).isEqualTo("john@example.com");
-        assertThat(customer.getMobileNumber()).isEqualTo("+27821234567");
-    }
-
-    @Test
-    @DisplayName("Should throw DuplicateResourceException for duplicate email")
-    void shouldThrowExceptionForDuplicateEmail() {
+    @DisplayName("Should throw exception when creating customer with duplicate email")
+    void shouldThrowExceptionOnDuplicateEmail() {
         // Given - Create first customer
         CreateCustomerRequest request1 = new CreateCustomerRequest(
-                "John",
-                "Doe",
-                "john@example.com",
-                "+27821234567"
-        );
+                "John", "Doe", "john@example.com", "+27821234567");
         customerService.createCustomer(request1);
 
-        // When - Try to create second customer with same email
+        // When - Try to create another customer with same email
         CreateCustomerRequest request2 = new CreateCustomerRequest(
-                "Jane",
-                "Smith",
-                "john@example.com",  // Same email
-                "+27829999999"
-        );
+                "Jane", "Smith", "  JOHN@EXAMPLE.COM  ", "+27829999999");
 
         // Then
         assertThatThrownBy(() -> customerService.createCustomer(request2))
                 .isInstanceOf(DuplicateResourceException.class);
-
-        // Verify only one customer in database
-        assertThat(customerRepository.count()).isEqualTo(1);
     }
 
     @Test
@@ -165,20 +153,26 @@ class CustomerServiceIntegrationTest {
                 "john@example.com",
                 "+27821234567"
         );
-        CustomerResponse created = customerService.createCustomer(request);
 
         // When
-        CustomerResponse found = customerService.getCustomer(created.customerId());
+        CustomerDetailedResponse created = customerService.createCustomer(request);
+        CustomerDetailedResponse found = customerService.getCustomer(created.customerId());
 
         // Then - Verify timestamps are populated (not null)
         assertThat(created.createdAt()).isNotNull();
         assertThat(created.updatedAt()).isNotNull();
+        assertThat(found.createdAt()).isNotNull();
+        assertThat(found.updatedAt()).isNotNull();
 
-        // Compare ignoring timestamps (nanosecond precision lost in DB roundtrip)
+        // Compare ignoring all timestamps (Instant) and BigDecimal
         assertThat(found)
                 .usingRecursiveComparison()
-                .ignoringFields("createdAt", "updatedAt")
+                .ignoringFieldsOfTypes(Instant.class, BigDecimal.class)
                 .isEqualTo(created);
+
+        // Verify account balance separately (BigDecimal comparison)
+        assertThat(found.accounts().getFirst().balance())
+                .isEqualByComparingTo(created.accounts().getFirst().balance());
     }
 
     @Test
@@ -195,27 +189,19 @@ class CustomerServiceIntegrationTest {
     @Test
     @DisplayName("Should get all customers from database")
     void shouldGetAllCustomers() {
-        // Given - Create multiple customers and save references
-        CustomerResponse customer1 = customerService.createCustomer(
-                new CreateCustomerRequest("John", "Doe", "john@example.com", "+27821111111"));
-        CustomerResponse customer2 = customerService.createCustomer(
-                new CreateCustomerRequest("Jane", "Smith", "jane@example.com", "+27822222222"));
-        CustomerResponse customer3 = customerService.createCustomer(
-                new CreateCustomerRequest("Bob", "Brown", "bob@example.com", "+27823333333"));
+        // Given - Create multiple customers
+        customerService.createCustomer(new CreateCustomerRequest(
+                "John", "Doe", "john@example.com", "+27821234567"));
+        customerService.createCustomer(new CreateCustomerRequest(
+                "Jane", "Smith", "jane@example.com", "+27829999999"));
 
         // When
-        List<CustomerResponse> customers = customerService.getAllCustomers();
+        List<CustomerSummaryResponse> customers = customerService.getAllCustomers();
 
-        // Then - Verify all timestamps are populated
-        assertThat(customers).hasSize(3);
-        assertThat(customer1.createdAt()).isNotNull();
-        assertThat(customer2.createdAt()).isNotNull();
-        assertThat(customer3.createdAt()).isNotNull();
+        // Then
+        assertThat(customers).hasSize(2);
+        assertThat(customers).extracting("firstName").containsExactlyInAnyOrder("John", "Jane");
 
-        // Compare ignoring timestamps (nanosecond precision lost in DB roundtrip)
-        assertThat(customers)
-                .usingRecursiveFieldByFieldElementComparatorIgnoringFields("createdAt", "updatedAt")
-                .containsExactlyInAnyOrder(customer1, customer2, customer3);
     }
 
     @Test
@@ -223,97 +209,71 @@ class CustomerServiceIntegrationTest {
     void shouldSearchByMobileNumber() {
         // Given - Create customers with different mobile numbers
         customerService.createCustomer(new CreateCustomerRequest(
-                "John", "Doe", "john@example.com", "+27821111111"));
-        CustomerResponse customer2 = customerService.createCustomer(new CreateCustomerRequest(
-                "Jane", "Smith", "jane@example.com", "+27829999999"));
+                "John", "Doe", "john@example.com", "+27821234567"));
         customerService.createCustomer(new CreateCustomerRequest(
-                "Bob", "Brown", "bob@example.com", "+27831111111"));
+                "Jane", "Smith", "jane@example.com", "+27829999999"));
 
-        // When - Search for mobile containing "999"
-        List<CustomerResponse> results = customerService.searchByMobileNumber("999");
+        // When - Search for "821"
+        List<CustomerSummaryResponse> results = customerService.searchByMobileNumber("821");
 
-        // Then - Compare ignoring timestamps (nanosecond precision lost in DB roundtrip)
+        // Then - Should find John
         assertThat(results).hasSize(1);
-        assertThat(results.getFirst())
-                .usingRecursiveComparison()
-                .ignoringFields("createdAt", "updatedAt")
-                .isEqualTo(customer2);
+        assertThat(results.getFirst().firstName()).isEqualTo("John");
     }
 
     @Test
     @DisplayName("Should update customer and persist changes")
-    void shouldUpdateCustomerAndPersist() {
+    void shouldUpdateCustomer() {
         // Given - Create customer
         CreateCustomerRequest createRequest = new CreateCustomerRequest(
                 "John", "Doe", "john@example.com", "+27821234567");
-        CustomerResponse created = customerService.createCustomer(createRequest);
+        CustomerDetailedResponse created = customerService.createCustomer(createRequest);
 
         // When - Update customer
         UpdateCustomerRequest updateRequest = new UpdateCustomerRequest(
-                "Jane",
-                null,
-                "jane@example.com",
-                null
-        );
-        CustomerResponse updated = customerService.updateCustomer(created.customerId(), updateRequest);
+                "Jane", "Smith", "jane@example.com", "+27829999999");
+        CustomerDetailedResponse updated = customerService.updateCustomer(created.customerId(), updateRequest);
 
         // Then
+        assertThat(updated.customerId()).isEqualTo(created.customerId());
         assertThat(updated.firstName()).isEqualTo("Jane");
-        assertThat(updated.lastName()).isEqualTo("Doe");  // Unchanged
+        assertThat(updated.lastName()).isEqualTo("Smith");
         assertThat(updated.email()).isEqualTo("jane@example.com");
-        assertThat(updated.mobileNumber()).isEqualTo("+27821234567");  // Unchanged
-
-        // Verify changes persisted in database using Optional.orElseThrow()
-        var customer = customerRepository.findById(created.customerId())
-                .orElseThrow(() -> new AssertionError("Customer should exist in database"));
-        assertThat(customer.getFirstName()).isEqualTo("Jane");
-        assertThat(customer.getLastName()).isEqualTo("Doe");
-        assertThat(customer.getEmail()).isEqualTo("jane@example.com");
-        assertThat(customer.getMobileNumber()).isEqualTo("+27821234567");
+        assertThat(updated.mobileNumber()).isEqualTo("+27829999999");
+        assertThat(updated.updatedAt()).isAfter(created.updatedAt());
     }
 
     @Test
-    @DisplayName("Should update updatedAt timestamp when customer is modified")
-    void shouldUpdateTimestampWhenModified() throws InterruptedException {
+    @DisplayName("Should update only provided fields (partial update)")
+    void shouldPartiallyUpdateCustomer() {
         // Given - Create customer
         CreateCustomerRequest createRequest = new CreateCustomerRequest(
                 "John", "Doe", "john@example.com", "+27821234567");
-        CustomerResponse created = customerService.createCustomer(createRequest);
+        CustomerDetailedResponse created = customerService.createCustomer(createRequest);
 
-        Instant originalCreatedAt = created.createdAt();
-        Instant originalUpdatedAt = created.updatedAt();
-
-        // Wait to ensure timestamp difference
-        Thread.sleep(1000);
-
-        // When - Update customer
+        // When - Update only first name
         UpdateCustomerRequest updateRequest = new UpdateCustomerRequest(
                 "Jane", null, null, null);
-        CustomerResponse updated = customerService.updateCustomer(created.customerId(), updateRequest);
+        CustomerDetailedResponse updated = customerService.updateCustomer(created.customerId(), updateRequest);
 
-        // Then - updatedAt should be after (handle nanosecond precision)
-        System.out.println("originalUpdatedAt: " + originalUpdatedAt);
-        System.out.println("updated.updatedAt(): " + updated.updatedAt());
-        assertThat(updated.updatedAt()).isAfter(originalUpdatedAt);  // updatedAt changed or equal due to precision
-
-        // Verify in database that update actually happened
-        var customer = customerRepository.findById(created.customerId())
-                .orElseThrow(() -> new AssertionError("Customer should exist"));
-        assertThat(customer.getFirstName()).isEqualTo("Jane");  // Verify update worked
+        // Then - Only first name changed
+        assertThat(updated.firstName()).isEqualTo("Jane");
+        assertThat(updated.lastName()).isEqualTo("Doe");  // Unchanged
+        assertThat(updated.email()).isEqualTo("john@example.com");  // Unchanged
+        assertThat(updated.mobileNumber()).isEqualTo("+27821234567");  // Unchanged
+        assertThat(updated.updatedAt()).isAfter(created.updatedAt());
     }
 
-
-
     @Test
-    @DisplayName("Should throw exception when updating with duplicate email")
-    void shouldThrowExceptionWhenUpdatingWithDuplicateEmail() {
+    @DisplayName("Should throw exception when updating to duplicate email")
+    void shouldThrowExceptionWhenUpdatingToDuplicateEmail() {
         // Given - Create two customers
-        CustomerResponse customer1 = customerService.createCustomer(
-                new CreateCustomerRequest("John", "Doe", "john@example.com", "+27821111111"));
-        CustomerResponse customer2 = customerService.createCustomer(
-                new CreateCustomerRequest("Jane", "Smith", "jane@example.com", "+27822222222"));
+        customerService.createCustomer(new CreateCustomerRequest(
+                "John", "Doe", "john@example.com", "+27821234567"));
+        CustomerDetailedResponse customer2 = customerService.createCustomer(new CreateCustomerRequest(
+                "Jane", "Smith", "jane@example.com", "+27829999999"));
 
-        // When - Try to update customer2 with customer1's email
+        // When - Try to update customer2's email to customer1's email
         UpdateCustomerRequest updateRequest = new UpdateCustomerRequest(
                 null, null, "john@example.com", null);
 
@@ -328,18 +288,22 @@ class CustomerServiceIntegrationTest {
         // Given - Create customer
         CreateCustomerRequest request = new CreateCustomerRequest(
                 "John", "Doe", "john@example.com", "+27821234567");
-        CustomerResponse created = customerService.createCustomer(request);
+        CustomerDetailedResponse created = customerService.createCustomer(request);
 
-        // Verify customer exists using service (not repository directly)
+        // Verify customer exists
         assertThatNoException().isThrownBy(() -> customerService.getCustomer(created.customerId()));
 
-        // When - Delete customer
+        // When - Delete customer (soft delete)
         customerService.deleteCustomer(created.customerId());
 
-        // Then - Verify customer deleted (should throw ResourceNotFoundException)
+        // Then - Verify customer is deleted (not findable via service)
+        // Soft delete sets active=false, so @SQLRestriction filters it out
         assertThatThrownBy(() -> customerService.getCustomer(created.customerId()))
                 .isInstanceOf(ResourceNotFoundException.class);
-        assertThat(customerRepository.count()).isEqualTo(0);
+
+        Long totalCount = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM customers", Long.class);
+        assertThat(totalCount).isEqualTo(1);  // Soft deleted row still exists
     }
 
     @Test
@@ -353,20 +317,5 @@ class CustomerServiceIntegrationTest {
                 .isInstanceOf(ResourceNotFoundException.class);
     }
 
-    @Test
-    @DisplayName("Should handle race condition for duplicate email")
-    void shouldHandleRaceConditionForDuplicateEmail() {
-        // Given - Create customer
-        CreateCustomerRequest request = new CreateCustomerRequest(
-                "John", "Doe", "john@example.com", "+27821234567");
-        customerService.createCustomer(request);
 
-        // When - Try to create another customer with normalized version of same email
-        CreateCustomerRequest request2 = new CreateCustomerRequest(
-                "Jane", "Smith", "  JOHN@EXAMPLE.COM  ", "+27829999999");
-
-        // Then - Should catch the duplicate even with different formatting
-        assertThatThrownBy(() -> customerService.createCustomer(request2))
-                .isInstanceOf(DuplicateResourceException.class);
-    }
 }

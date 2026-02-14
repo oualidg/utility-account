@@ -15,11 +15,13 @@ import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -43,7 +45,7 @@ public class GlobalExceptionHandler {
             ResourceNotFoundException ex,
             HttpServletRequest request) {
 
-        log.error("Resource not found: {}", ex.getMessage());
+        log.warn("Resource not found: {}", ex.getMessage());
 
         ErrorResponse errorResponse = ErrorResponse.of(
                 HttpStatus.NOT_FOUND,
@@ -63,7 +65,7 @@ public class GlobalExceptionHandler {
             DuplicateResourceException ex,
             HttpServletRequest request) {
 
-        log.error("Duplicate resource: {}", ex.getMessage());
+        log.warn("Duplicate resource: {}", ex.getMessage());
 
         ErrorResponse errorResponse = ErrorResponse.of(
                 HttpStatus.CONFLICT,
@@ -92,7 +94,10 @@ public class GlobalExceptionHandler {
             validationErrors.put(fieldName, errorMessage);
         });
 
-        log.error("Validation failed: {}", validationErrors);
+        log.warn("Validation failed for {} {} | Errors: {}",
+                request.getMethod(),
+                request.getRequestURI(),
+                validationErrors);
 
         ErrorResponse errorResponse = ErrorResponse.ofValidation(
                 "Validation failed for one or more fields",
@@ -104,7 +109,8 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * Handle validation errors from @Valid annotations on path variables and parameters.
+     * Handles validation errors on path variables and request parameters (400 Bad Request).
+     * Triggered when @Valid annotation fails on @PathVariable or @RequestParam.
      *
      * @param ex the exception
      * @param request the web request
@@ -117,14 +123,17 @@ public class GlobalExceptionHandler {
 
         // Extract validation error messages
         Map<String, String> errors = new HashMap<>();
-        ex.getValueResults().forEach(result -> {
+        ex.getParameterValidationResults().forEach(result -> {
             String parameterName = result.getMethodParameter().getParameterName();
             result.getResolvableErrors().forEach(error -> {
                 errors.put(parameterName != null ? parameterName : "parameter", error.getDefaultMessage());
             });
         });
 
-        log.error("Validation failed: {}", errors);
+        log.warn("Validation failed for {} {} | Errors: {}",
+                request.getMethod(),
+                request.getRequestURI(),
+                errors);
 
         String message = errors.isEmpty() ? "Validation failed" : errors.values().iterator().next();
 
@@ -139,14 +148,14 @@ public class GlobalExceptionHandler {
 
     /**
      * Handles IllegalArgumentException (400 Bad Request)
-     * Thrown when invalid arguments are passed to methods.
+     * Thrown for invalid input arguments.
      */
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ErrorResponse> handleIllegalArgument(
             IllegalArgumentException ex,
             HttpServletRequest request) {
 
-        log.error("Illegal argument: {}", ex.getMessage());
+        log.warn("Invalid argument: {}", ex.getMessage());
 
         ErrorResponse errorResponse = ErrorResponse.of(
                 HttpStatus.BAD_REQUEST,
@@ -158,8 +167,72 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * Handles JSON parsing errors and invalid request body content (400 Bad Request).
+     * Triggered when the request body cannot be deserialized into the expected DTO.
+     *
+     * @param ex the JSON parsing exception
+     * @param request the HTTP request that triggered the exception
+     * @return 400 response with specific error details
+     */
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ErrorResponse> handleHttpMessageNotReadable(
+            HttpMessageNotReadableException ex,
+            HttpServletRequest request) {
+
+        String message = "Invalid request payload: one or more fields contain invalid values.";
+
+        if (ex.getCause() instanceof com.fasterxml.jackson.databind.exc.InvalidFormatException formatException) {
+                message = String.format("Invalid value '%s' for field '%s'",
+                        formatException.getValue(),
+                        formatException.getPath().getFirst().getFieldName());
+        }
+
+        log.warn("Payload mapping failed: {}", message);
+
+        ErrorResponse errorResponse = ErrorResponse.of(
+                HttpStatus.BAD_REQUEST,
+                message,
+                request.getRequestURI()
+        );
+
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse);
+    }
+
+    /**
+     * Handles type conversion errors for path variables and request parameters (400 Bad Request).
+     * Triggered when Spring cannot convert a path variable or @RequestParam to the expected type.
+     **
+     * @param ex the type mismatch exception
+     * @param request the HTTP request that triggered the exception
+     * @return 400 response with user-friendly error message
+     */
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ErrorResponse> handleTypeMismatch(
+            MethodArgumentTypeMismatchException ex,
+            HttpServletRequest request) {
+
+        String fieldName = ex.getName();
+        String message = String.format("Invalid value provided for parameter: '%s'", fieldName);
+
+        // Internal log to see what the user actually typed
+        String targetType = (ex.getRequiredType() != null)
+                ? ex.getRequiredType().getSimpleName()
+                : "unknown type";
+        log.warn("Parameter binding failed: {} = '{}'. Expected type: {}",
+                fieldName, ex.getValue(), targetType);
+
+        ErrorResponse errorResponse = ErrorResponse.of(
+                HttpStatus.BAD_REQUEST,
+                message,
+                request.getRequestURI()
+        );
+
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse);
+    }
+
+    /**
      * Handles all other unexpected exceptions (500 Internal Server Error)
-     * This is a catch-all for errors we didn't anticipate.
+     * This is a catch-all handler for any exceptions not handled by specific handlers.
      */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGenericException(

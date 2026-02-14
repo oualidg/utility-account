@@ -98,6 +98,13 @@
             <version>${mapstruct.version}</version>
         </dependency>
 
+        <!-- UUID v7 (Time-ordered) -->
+        <dependency>
+            <groupId>com.github.f4b6a3</groupId>
+            <artifactId>uuid-creator</artifactId>
+            <version>5.3.7</version>
+        </dependency>
+
         <!-- Spring Boot Test (Testing framework) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

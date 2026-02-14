@@ -27,10 +27,12 @@ import static org.junit.jupiter.api.Assertions.*;
 @DisplayName("LuhnGenerator Unit Tests")
 class LuhnGeneratorTest {
 
+    private final LuhnGenerator luhnGenerator = new LuhnGenerator();
+
     @Test
     void shouldGenerateValid8DigitCustomerId() {
         // Act
-        Long customerId = LuhnGenerator.generateCustomerId();
+        Long customerId = luhnGenerator.generateCustomerId();
 
         // Assert
         assertNotNull(customerId, "Customer ID should not be null");
@@ -42,7 +44,7 @@ class LuhnGeneratorTest {
     @Test
     void shouldGenerateValid10DigitAccountNumber() {
         // Act
-        Long accountNumber = LuhnGenerator.generateAccountNumber();
+        Long accountNumber = luhnGenerator.generateAccountNumber();
 
         // Assert
         assertNotNull(accountNumber, "Account Number should not be null");
@@ -128,10 +130,10 @@ class LuhnGeneratorTest {
         Set<Long> ids = new HashSet<>();
 
         for (int i = 0; i < 1000; i++) {
-            Long id = LuhnGenerator.generateCustomerId();
+            Long id = luhnGenerator.generateCustomerId();
             assertTrue(ids.add(id), "Generated ID should be unique: " + id);
         }
-   }
+    }
 
     @Test
     void shouldGenerate1000UniqueAccountNumbers() {
@@ -139,7 +141,7 @@ class LuhnGeneratorTest {
         Set<Long> numbers = new HashSet<>();
 
         for (int i = 0; i < 1000; i++) {
-            Long number = LuhnGenerator.generateAccountNumber();
+            Long number = luhnGenerator.generateAccountNumber();
             assertTrue(numbers.add(number), "Generated Account Number should be unique: " + number);
         }
     }

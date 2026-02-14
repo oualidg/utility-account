@@ -22,7 +22,8 @@ package com.mycompany.api.account.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.mycompany.api.account.dto.CreateCustomerRequest;
-import com.mycompany.api.account.dto.CustomerResponse;
+import com.mycompany.api.account.dto.CustomerDetailedResponse;
+import com.mycompany.api.account.dto.CustomerSummaryResponse;
 import com.mycompany.api.account.dto.UpdateCustomerRequest;
 import com.mycompany.api.account.exception.DuplicateResourceException;
 import com.mycompany.api.account.exception.ResourceNotFoundException;
@@ -65,19 +66,20 @@ class CustomerControllerTest {
     @MockitoBean
     private CustomerService customerService;
 
-    private CustomerResponse sampleCustomerResponse;
+    private CustomerDetailedResponse sampleCustomerResponse;
     private CreateCustomerRequest sampleCreateRequest;
     private UpdateCustomerRequest sampleUpdateRequest;
 
     @BeforeEach
     void setUp() {
         // Sample data for tests - using VALID 8-digit Luhn customer ID: 12345674
-        sampleCustomerResponse = new CustomerResponse(
-                12345674L,  // Valid Luhn checksum
+        sampleCustomerResponse = new CustomerDetailedResponse(
+                12345674L,
                 "John",
                 "Doe",
-                "john@example.com",
-                "+27821234567",
+                "john@email.com",
+                "0123456789",
+                java.util.Collections.emptyList(), // Add this!
                 Instant.now(),
                 Instant.now()
         );
@@ -161,13 +163,13 @@ class CustomerControllerTest {
     void shouldReturnCustomerById() throws Exception {
         // Given - Valid 8-digit Luhn customer ID
         Long customerId = 12345674L;
-        when(customerService.getCustomer(customerId))
+        when(customerService.getCustomer(sampleCustomerResponse.customerId()))
                 .thenReturn(sampleCustomerResponse);
 
         // When & Then
         mockMvc.perform(get("/api/v1/customers/{id}", customerId))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.customerId").value(customerId))
+                .andExpect(jsonPath("$.customerId").value(sampleCustomerResponse.customerId()))
                 .andExpect(jsonPath("$.firstName").value(sampleCustomerResponse.firstName()))
                 .andExpect(jsonPath("$.lastName").value(sampleCustomerResponse.lastName()))
                 .andExpect(jsonPath("$.email").value(sampleCustomerResponse.email()));
@@ -210,24 +212,31 @@ class CustomerControllerTest {
     @DisplayName("GET /api/v1/customers - Should return all customers")
     void shouldReturnAllCustomers() throws Exception {
         // Given
-        CustomerResponse customer2 = new CustomerResponse(
+        CustomerSummaryResponse summary1 = new CustomerSummaryResponse(
+                12345670L,
+                "John",
+                "Doe",
+                "john@example.com",
+                "+27821111111"
+        );
+
+        CustomerSummaryResponse summary2 = new CustomerSummaryResponse(
                 87654323L,  // Valid Luhn checksum
                 "Jane",
                 "Smith",
                 "jane@example.com",
-                "+27829999999",
-                Instant.now(),
-                Instant.now()
+                "+27829999999"
         );
-        List<CustomerResponse> customers = List.of(sampleCustomerResponse, customer2);
+
+        List<CustomerSummaryResponse> customers = List.of(summary1, summary2);
         when(customerService.getAllCustomers()).thenReturn(customers);
 
         // When & Then
         mockMvc.perform(get("/api/v1/customers"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$", hasSize(2)))
-                .andExpect(jsonPath("$[0].customerId").value(sampleCustomerResponse.customerId()))
-                .andExpect(jsonPath("$[1].customerId").value(customer2.customerId()));
+                .andExpect(jsonPath("$[0].customerId").value(summary1.customerId()))
+                .andExpect(jsonPath("$[1].customerId").value(summary2.customerId()));
 
         verify(customerService, times(1)).getAllCustomers();
     }
@@ -251,12 +260,13 @@ class CustomerControllerTest {
     void shouldUpdateCustomerSuccessfully() throws Exception {
         // Given - Valid Luhn customer ID
         Long customerId = 12345674L;
-        CustomerResponse updatedResponse = new CustomerResponse(
+        CustomerDetailedResponse updatedResponse = new CustomerDetailedResponse(
                 customerId,
                 sampleUpdateRequest.firstName(),
                 sampleUpdateRequest.lastName(),
                 sampleUpdateRequest.email(),
                 sampleUpdateRequest.mobileNumber(),
+                java.util.Collections.emptyList(),
                 Instant.now(),
                 Instant.now()
         );

@@ -8,21 +8,35 @@
  *
  * Feel free to use or contribute. Contact: oualid.gharach@gmail.com
  */
+/*
+ * Copyright (c) 2026 Oualid Gharach. All rights reserved.
+ *
+ * Aiming for production-grade standards through clean code and best practices
+ * for educational and informational purposes.
+ *
+ * Created on: 2/3/2026 at 6:26 PM
+ *
+ * Feel free to use or contribute. Contact: oualid.gharach@gmail.com
+ */
 package com.mycompany.api.account.util;
+
+import org.springframework.stereotype.Component;
 
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.IntStream;
 
 /**
- * Utility class for generating Luhn-validated identifiers.
+ * Luhn-validated identifier generator and validator.
  * Supports generation of 8-digit Customer IDs and 10-digit Account Numbers.
  *
- * The Luhn algorithm (Mod 10) is used to generate a checksum digit,
- * providing basic validation against typos and errors.
+ * <p>Generation methods are instance methods (injectable, mockable for testing
+ * collision retry). Validation methods remain static since they are pure functions
+ * used in annotation validators and tests.</p>
  *
  * @author Oualid Gharach
  */
-public final class LuhnGenerator {
+@Component
+public class LuhnGenerator {
 
     // Pre-calculated powers of 10 for performance
     private static final long[] POWERS_OF_10 = {
@@ -30,22 +44,12 @@ public final class LuhnGenerator {
     };
 
     /**
-     * Private constructor to prevent instantiation.
-     * This is a utility class with only static methods.
-     */
-    private LuhnGenerator() {
-        throw new UnsupportedOperationException("Utility class cannot be instantiated");
-    }
-
-    /**
      * Generates an 8-digit Luhn-validated Customer ID.
      * Format: 7 random digits + 1 checksum digit
      *
-     * Example: 12345670
-     *
      * @return 8-digit Customer ID as Long
      */
-    public static Long generateCustomerId() {
+    public Long generateCustomerId() {
         return generateLuhnNumber(8);
     }
 
@@ -53,11 +57,9 @@ public final class LuhnGenerator {
      * Generates a 10-digit Luhn-validated Account Number.
      * Format: 9 random digits + 1 checksum digit
      *
-     * Example: 1234567890
-     *
      * @return 10-digit Account Number as Long
      */
-    public static Long generateAccountNumber() {
+    public Long generateAccountNumber() {
         return generateLuhnNumber(10);
     }
 
@@ -68,7 +70,7 @@ public final class LuhnGenerator {
      * @return Luhn-validated number
      * @throws IllegalArgumentException if length is not between 2 and 19
      */
-    private static Long generateLuhnNumber(int length) {
+    private Long generateLuhnNumber(int length) {
         if (length < 8 || length > 10) {
             throw new IllegalArgumentException("Length must be between 8 and 10");
         }

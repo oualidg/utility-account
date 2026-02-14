@@ -1,0 +1,66 @@
+databaseChangeLog:
+  - changeSet:
+      id: 003-create-payments-table
+      author: Oualid Gharach
+      changes:
+        - createTable:
+            tableName: payments
+            columns:
+              - column:
+                  name: receipt_number
+                  type: VARCHAR(36)
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: account_number
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: amount
+                  type: DECIMAL(15,2)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: payment_provider
+                  type: VARCHAR(20)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: payment_reference
+                  type: VARCHAR(64)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: payment_date
+                  type: TIMESTAMP
+                  constraints:
+                    nullable: false
+
+        - addForeignKeyConstraint:
+            baseTableName: payments
+            baseColumnNames: account_number
+            constraintName: fk_payment_account
+            referencedTableName: accounts
+            referencedColumnNames: account_number
+            onDelete: RESTRICT
+
+        - addUniqueConstraint:
+            tableName: payments
+            columnNames: payment_provider, payment_reference
+            constraintName: uk_payment_provider_reference
+
+        - createIndex:
+            indexName: idx_payment_account_number
+            tableName: payments
+            columns:
+              - column:
+                  name: account_number
+
+        - createIndex:
+            indexName: idx_payment_date
+            tableName: payments
+            columns:
+              - column:
+                  name: payment_date

@@ -11,7 +11,7 @@
 package com.mycompany.api.account.mapper;
 
 import com.mycompany.api.account.dto.CreateCustomerRequest;
-import com.mycompany.api.account.dto.CustomerResponse;
+import com.mycompany.api.account.dto.CustomerDetailedResponse;
 import com.mycompany.api.account.dto.UpdateCustomerRequest;
 import com.mycompany.api.account.entity.Customer;
 import org.junit.jupiter.api.BeforeEach;
@@ -98,7 +98,7 @@ class CustomerMapperTest {
         customer.setUpdatedAt(Instant.now());
 
         // When
-        CustomerResponse response = customerMapper.toResponse(customer);
+        CustomerDetailedResponse response = customerMapper.toDetailedResponse(customer);
 
         // Then
         assertThat(response).isNotNull();

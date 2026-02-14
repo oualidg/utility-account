@@ -11,14 +11,14 @@
 package com.mycompany.api.account.service;
 
 import com.mycompany.api.account.dto.CreateCustomerRequest;
-import com.mycompany.api.account.dto.CustomerResponse;
+import com.mycompany.api.account.dto.CustomerDetailedResponse;
+import com.mycompany.api.account.dto.CustomerSummaryResponse;
 import com.mycompany.api.account.dto.UpdateCustomerRequest;
 import com.mycompany.api.account.entity.Customer;
 import com.mycompany.api.account.exception.DuplicateResourceException;
 import com.mycompany.api.account.exception.ResourceNotFoundException;
 import com.mycompany.api.account.mapper.CustomerMapper;
 import com.mycompany.api.account.repository.CustomerRepository;
-import com.mycompany.api.account.util.LuhnGenerator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -43,76 +43,47 @@ public class CustomerService {
 
     private final CustomerRepository customerRepository;
     private final CustomerMapper customerMapper;
+    private final CustomerTransactionHelper transactionHelper;
 
     /**
-     * Create a new customer.
+     * Create a new customer with main account.
+     * Retries up to 5 times if a Luhn ID collision occurs (Customer ID or Account Number).
+     *
+     * <p>This method is @Retryable but intentionally NOT @Transactional.
+     * The transactional work is delegated to {@link CustomerTransactionHelper},
+     * ensuring each retry attempt gets a fresh transaction and clean persistence
+     * context. A DuplicateResourceException (email conflict) is NOT retried
+     * because it is not a DataIntegrityViolationException from a Luhn collision.</p>
      *
      * @param request the customer creation request
      * @return the created customer response
-     * @throws DuplicateResourceException if email already exists
-     */
-    @Transactional
-    public CustomerResponse createCustomer(CreateCustomerRequest request) {
-        log.info("Creating customer with email: {}", request.email());
-        log.debug("Full request: {}", request);
-
-        // Map request to entity (with normalization) - happens once
-        Customer customer = customerMapper.toEntity(request);
-
-        // Save customer with retry - checks email on each attempt
-        Customer savedCustomer = saveCustomerWithRetry(customer);
-
-        // TODO: Phase 2 - Create default Account for this customer here
-        // Account account = accountService.createDefaultAccount(savedCustomer);
-
-        log.info("Customer created successfully with ID: {}", savedCustomer.getCustomerId());
-
-        return customerMapper.toResponse(savedCustomer);
-    }
-
-    /**
-     * Save customer with retry on collision.
-     * Checks email and attempts save. Retries up to 3 times if customer ID collision occurs.
-     * Email check happens on EVERY attempt to handle race conditions.
-     *
-     * @param customer the customer entity (already normalized)
-     * @return the saved customer entity (for further processing)
-     * @throws DuplicateResourceException if email already exists (no retry - fails immediately)
+     * @throws DuplicateResourceException if email already exists (fails immediately, no retry)
      */
     @Retryable(
             retryFor = DataIntegrityViolationException.class,
-            maxAttempts = 3,
+            noRetryFor = DuplicateResourceException.class,
+            maxAttempts = 5,
             backoff = @Backoff(delay = 100)
     )
-    private Customer saveCustomerWithRetry(Customer customer) {
-        // Check email on EVERY attempt (handles race conditions)
-        if (customerRepository.existsByEmail(customer.getEmail())) {
-            throw new DuplicateResourceException("Customer with email " + customer.getEmail() + " already exists");
-        }
-
-        // Generate customer ID on each attempt
-        Long customerId = LuhnGenerator.generateCustomerId();
-        customer.setCustomerId(customerId);
-
-        // Save to database (will throw DataIntegrityViolationException if ID collision)
-        return customerRepository.save(customer);
+    public CustomerDetailedResponse createCustomer(CreateCustomerRequest request) {
+        return transactionHelper.executeCreateCustomer(request);
     }
 
     /**
      * Get customer by customer ID.
      *
      * @param customerId the customer ID
-     * @return the customer response
+     * @return the customer response with accounts
      * @throws ResourceNotFoundException if customer not found
      */
     @Transactional(readOnly = true)
-    public CustomerResponse getCustomer(Long customerId) {
+    public CustomerDetailedResponse getCustomer(Long customerId) {
         log.info("Fetching customer with ID: {}", customerId);
 
-        Customer customer = customerRepository.findById(customerId)
+        return customerRepository.findByIdWithAccounts(customerId)
+                .map(customerMapper::toDetailedResponse)
                 .orElseThrow(() -> new ResourceNotFoundException("Customer not found with ID: " + customerId));
 
-        return customerMapper.toResponse(customer);
     }
 
     /**
@@ -121,11 +92,11 @@ public class CustomerService {
      * @return list of all customers
      */
     @Transactional(readOnly = true)
-    public List<CustomerResponse> getAllCustomers() {
+    public List<CustomerSummaryResponse> getAllCustomers() {
         log.info("Fetching all customers");
 
         return customerRepository.findAll().stream()
-                .map(customerMapper::toResponse)
+                .map(customerMapper::toSummaryResponse)
                 .toList();
     }
 
@@ -136,11 +107,11 @@ public class CustomerService {
      * @return list of matching customers
      */
     @Transactional(readOnly = true)
-    public List<CustomerResponse> searchByMobileNumber(String mobileNumber) {
+    public List<CustomerSummaryResponse> searchByMobileNumber(String mobileNumber) {
         log.info("Searching customers by mobile number containing: {}", mobileNumber);
 
         return customerRepository.findByMobileNumberContaining(mobileNumber).stream()
-                .map(customerMapper::toResponse)
+                .map(customerMapper::toSummaryResponse)
                 .toList();
     }
 
@@ -149,24 +120,24 @@ public class CustomerService {
      *
      * @param customerId the customer ID
      * @param request the update request
-     * @return the updated customer response
+     * @return the updated customer response with accounts
      * @throws ResourceNotFoundException if customer not found
      * @throws DuplicateResourceException if new email already exists
      */
     @Transactional
-    public CustomerResponse updateCustomer(Long customerId, UpdateCustomerRequest request) {
+    public CustomerDetailedResponse updateCustomer(Long customerId, UpdateCustomerRequest request) {
         log.info("Updating customer with ID: {}", customerId);
         log.debug("Update request: {}", request);
 
         // Find existing customer
-        Customer customer = customerRepository.findById(customerId)
+        Customer customer = customerRepository.findByIdWithAccounts(customerId)
                 .orElseThrow(() -> new ResourceNotFoundException("Customer not found with ID: " + customerId));
 
         // Check if email is being changed and if new email already exists
         if (request.email() != null) {
             String normalizedNewEmail = customerMapper.normalizeEmail(request.email());
             if (!normalizedNewEmail.equals(customer.getEmail())) {
-                if (customerRepository.existsByEmail(normalizedNewEmail)) {
+                if (customerRepository.existsByEmailIncludingInactive(normalizedNewEmail)) {
                     throw new DuplicateResourceException("Customer with email " + request.email() + " already exists");
                 }
             }
@@ -175,7 +146,9 @@ public class CustomerService {
         // Update entity using MapStruct (only non-null fields, with normalization)
         customerMapper.updateEntity(request, customer);
 
-        // Manually set updatedAt to ensure it's updated (JPA dirty checking doesn't always detect MapStruct changes)
+        // Manually set updatedAt — @PreUpdate may not fire if Hibernate detects no
+        // dirty fields after MapStruct applies identical values, or if the only change
+        // is to updatedAt itself. Explicit assignment guarantees the timestamp updates.
         customer.setUpdatedAt(Instant.now());
 
         // Save updated customer
@@ -183,25 +156,25 @@ public class CustomerService {
 
         log.info("Customer updated successfully with ID: {}", customerId);
 
-        return customerMapper.toResponse(updatedCustomer);
+        return customerMapper.toDetailedResponse(updatedCustomer);
     }
 
     /**
-     * Delete a customer.
+     * Soft-delete a customer by setting active = false.
+     * The @SQLRestriction on the entity filters this customer from all future queries.
      *
      * @param customerId the customer ID
      * @throws ResourceNotFoundException if customer not found
      */
     @Transactional
     public void deleteCustomer(Long customerId) {
-        log.info("Deleting customer with ID: {}", customerId);
+        log.info("Soft-deleting customer with ID: {}", customerId);
 
-        if (!customerRepository.existsById(customerId)) {
-            throw new ResourceNotFoundException("Customer not found with ID: " + customerId);
-        }
+        Customer customer = customerRepository.findById(customerId)
+                .orElseThrow(() -> new ResourceNotFoundException("Customer not found: " + customerId));
 
-        customerRepository.deleteById(customerId);
+        customer.setActive(false);
 
-        log.info("Customer deleted successfully with ID: {}", customerId);
+        log.info("Customer soft-deleted successfully with ID: {}", customerId);
     }
 }

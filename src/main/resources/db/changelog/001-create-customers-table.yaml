@@ -6,7 +6,7 @@ databaseChangeLog:
         - createTable:
             tableName: customers
             columns:
-              # Primary Key: 8-digit Luhn customer ID
+              # Primary Key: 8-digit customer ID
               - column:
                   name: customer_id
                   type: BIGINT
@@ -68,3 +68,4 @@ databaseChangeLog:
             columns:
               - column:
                   name: mobile_number
+

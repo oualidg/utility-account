@@ -11,7 +11,8 @@
 package com.mycompany.api.account.controller;
 
 import com.mycompany.api.account.dto.CreateCustomerRequest;
-import com.mycompany.api.account.dto.CustomerResponse;
+import com.mycompany.api.account.dto.CustomerDetailedResponse;
+import com.mycompany.api.account.dto.CustomerSummaryResponse;
 import com.mycompany.api.account.dto.UpdateCustomerRequest;
 import com.mycompany.api.account.service.CustomerService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -31,7 +32,6 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 import java.net.URI;
 import java.util.List;
 import com.mycompany.api.account.validation.ValidLuhn;
-import jakarta.validation.Valid;
 
 /**
  * REST Controller for Customer operations.
@@ -58,16 +58,16 @@ public class CustomerController {
     @Operation(summary = "Create a new customer", description = "Creates a new customer with auto-generated customer ID")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "201", description = "Customer created successfully",
-                    content = @Content(schema = @Schema(implementation = CustomerResponse.class))),
+                    content = @Content(schema = @Schema(implementation = CustomerDetailedResponse.class))),
             @ApiResponse(responseCode = "400", description = "Invalid input data"),
             @ApiResponse(responseCode = "409", description = "Customer with email already exists")
     })
-    public ResponseEntity<CustomerResponse> createCustomer(
+    public ResponseEntity<CustomerDetailedResponse> createCustomer(
             @Valid @RequestBody CreateCustomerRequest request) {
 
         log.info("REST request to create customer with email: {}", request.email());
 
-        CustomerResponse response = customerService.createCustomer(request);
+        CustomerDetailedResponse response = customerService.createCustomer(request);
 
         // Build Location header: /api/v1/customers/{customerId}
         URI location = ServletUriComponentsBuilder
@@ -89,17 +89,17 @@ public class CustomerController {
     @Operation(summary = "Get customer by ID", description = "Retrieves customer details by customer ID")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Customer found",
-                    content = @Content(schema = @Schema(implementation = CustomerResponse.class))),
+                    content = @Content(schema = @Schema(implementation = CustomerDetailedResponse.class))),
             @ApiResponse(responseCode = "404", description = "Customer not found")
     })
-    public ResponseEntity<CustomerResponse> getCustomer(
+    public ResponseEntity<CustomerDetailedResponse> getCustomer(
             @Parameter(description = "Customer ID", example = "12345670")
             @ValidLuhn(length = 8, message = "Customer ID must be a valid 8-digit number")
             @PathVariable Long customerId) {
 
         log.info("REST request to get customer: {}", customerId);
 
-        CustomerResponse response = customerService.getCustomer(customerId);
+        CustomerDetailedResponse response = customerService.getCustomer(customerId);
 
         return ResponseEntity.ok(response);
     }
@@ -114,11 +114,11 @@ public class CustomerController {
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Customers retrieved successfully")
     })
-    public ResponseEntity<List<CustomerResponse>> getAllCustomers() {
+    public ResponseEntity<List<CustomerSummaryResponse>> getAllCustomers() {
 
         log.info("REST request to get all customers");
 
-        List<CustomerResponse> customers = customerService.getAllCustomers();
+        List<CustomerSummaryResponse> customers = customerService.getAllCustomers();
 
         return ResponseEntity.ok(customers);
     }
@@ -135,13 +135,13 @@ public class CustomerController {
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Search completed successfully")
     })
-    public ResponseEntity<List<CustomerResponse>> searchByMobile(
+    public ResponseEntity<List<CustomerSummaryResponse>> searchByMobile(
             @Parameter(description = "Mobile number to search for", example = "082")
             @RequestParam String mobile) {
 
         log.info("REST request to search customers by mobile: {}", mobile);
 
-        List<CustomerResponse> customers = customerService.searchByMobileNumber(mobile);
+        List<CustomerSummaryResponse> customers = customerService.searchByMobileNumber(mobile);
 
         return ResponseEntity.ok(customers);
     }
@@ -157,12 +157,12 @@ public class CustomerController {
     @Operation(summary = "Update customer", description = "Updates an existing customer (partial update supported)")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Customer updated successfully",
-                    content = @Content(schema = @Schema(implementation = CustomerResponse.class))),
+                    content = @Content(schema = @Schema(implementation = CustomerDetailedResponse.class))),
             @ApiResponse(responseCode = "400", description = "Invalid input data"),
             @ApiResponse(responseCode = "404", description = "Customer not found"),
             @ApiResponse(responseCode = "409", description = "Email already exists")
     })
-    public ResponseEntity<CustomerResponse> updateCustomer(
+    public ResponseEntity<CustomerDetailedResponse> updateCustomer(
             @Parameter(description = "Customer ID", example = "12345670")
             @ValidLuhn(length = 8, message = "Customer ID must be a valid 8-digit number")
             @PathVariable Long customerId,
@@ -170,7 +170,7 @@ public class CustomerController {
 
         log.info("REST request to update customer: {}", customerId);
 
-        CustomerResponse response = customerService.updateCustomer(customerId, request);
+        CustomerDetailedResponse response = customerService.updateCustomer(customerId, request);
 
         return ResponseEntity.ok(response);
     }

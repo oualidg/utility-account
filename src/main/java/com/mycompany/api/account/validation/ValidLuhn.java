@@ -17,7 +17,6 @@ import java.lang.annotation.*;
 
 /**
  * Custom validation annotation to validate Luhn checksum for customer IDs and account numbers.
- *
  * Usage examples:
  * - @ValidLuhn(length = 8) for customer IDs (8-digit)
  * - @ValidLuhn(length = 10) for account numbers (10-digit)
