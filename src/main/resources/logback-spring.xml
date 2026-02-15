@@ -1,0 +1,167 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Logback configuration for Utility Account Management System
+
+  Features:
+  - Correlation ID in all log statements (via MDC)
+  - Async logging for both console and file
+  - Port-based log folders (supports multiple instances)
+  - Compressed archives (.gz) to save disk space
+  - Profile-based retention (2 days dev/test, 30 days prod)
+  - Graceful shutdown hook
+
+  Author: Oualid Gharach
+  Created: 2026-02-14
+-->
+<configuration>
+
+    <!-- Graceful shutdown: ensures async appenders flush on shutdown -->
+    <shutdownHook class="ch.qos.logback.core.hook.DefaultShutdownHook"/>
+
+    <!-- ============================================== -->
+    <!-- Properties                                     -->
+    <!-- ============================================== -->
+
+    <!-- Get server port from Spring properties (supports multiple instances) -->
+    <springProperty scope="context" name="instancePort" source="server.port" defaultValue="8080"/>
+
+    <!-- Get application name from Spring properties (makes config reusable) -->
+    <springProperty scope="context" name="appName" source="spring.application.name" defaultValue="application"/>
+
+    <!-- Async queue size (can be overridden via logging.async.queueSize property) -->
+    <springProperty scope="context" name="asyncQueueSize" source="logging.async.queueSize" defaultValue="1024"/>
+
+    <!-- Log pattern with correlation ID from MDC -->
+    <property name="LOG_PATTERN"
+              value="%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] [%X{correlationId:-NO_CORRELATION_ID}] %-5level %logger{36} - %msg%n"/>
+
+    <!-- Default retention: 30 days for production -->
+    <property name="LOG_RETENTION" value="30"/>
+
+    <!-- Override retention for development: 2 days (faster cleanup) -->
+    <springProfile name="dev">
+        <property name="LOG_RETENTION" value="2"/>
+    </springProfile>
+
+    <!-- ============================================== -->
+    <!-- Console Appender (Development)                 -->
+    <!-- ============================================== -->
+
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>${LOG_PATTERN}</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+    </appender>
+
+    <!-- Async wrapper for console (prevents blocking on console I/O) -->
+    <appender name="ASYNC_CONSOLE" class="ch.qos.logback.classic.AsyncAppender">
+        <appender-ref ref="CONSOLE" />
+        <queueSize>${asyncQueueSize}</queueSize>
+        <discardingThreshold>0</discardingThreshold>
+        <neverBlock>false</neverBlock>
+    </appender>
+
+    <!-- ============================================== -->
+    <!-- File Appender with Size and Time Based Rolling -->
+    <!-- ============================================== -->
+
+    <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <!--
+          Current log file: logs/{port}/{appName}.log
+          Example: logs/8080/utility-account.log
+          Supports multiple instances on different ports
+          Uses spring.application.name for flexibility
+        -->
+        <file>logs/${instancePort}/${appName}.log</file>
+
+        <encoder>
+            <pattern>${LOG_PATTERN}</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+
+        <!-- Rolling policy: Size and time based with compression -->
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <!--
+              Archive pattern with gzip compression
+              Example: logs/8080/archived/utility-account.2026-02-14.0.log.gz
+            -->
+            <fileNamePattern>logs/${instancePort}/archived/${appName}.%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
+
+            <!-- Maximum size per log file before rotation -->
+            <maxFileSize>10MB</maxFileSize>
+
+            <!-- Keep history based on profile (2 days dev/test, 30 days prod) -->
+            <maxHistory>${LOG_RETENTION}</maxHistory>
+
+            <!-- Total size cap for all archived logs (prevents disk fill) -->
+            <totalSizeCap>1GB</totalSizeCap>
+
+            <!-- Delete old files on startup if needed -->
+            <cleanHistoryOnStart>true</cleanHistoryOnStart>
+        </rollingPolicy>
+    </appender>
+
+    <!-- ============================================== -->
+    <!-- Async Appender (Production Performance)        -->
+    <!-- ============================================== -->
+
+    <appender name="ASYNC_FILE" class="ch.qos.logback.classic.AsyncAppender">
+        <!-- Queue size: how many events can be queued before blocking -->
+        <queueSize>${asyncQueueSize}</queueSize>
+
+        <!--
+          Discarding threshold:
+          0 = never discard events (safer, may block)
+        -->
+        <discardingThreshold>0</discardingThreshold>
+
+        <!--
+          Never block:
+          false = block caller if queue is full (safer, prevents log loss)
+        -->
+        <neverBlock>false</neverBlock>
+
+        <!-- Reference to the actual file appender -->
+        <appender-ref ref="FILE" />
+    </appender>
+
+    <!-- ============================================== -->
+    <!-- Logger Configuration Per Profile               -->
+    <!-- ============================================== -->
+
+    <!--
+      Development Profile: DEBUG level for detailed troubleshooting
+      - Console + File output
+      - DEBUG for our code
+      - DEBUG for Spring Web (HTTP requests)
+      - DEBUG for SQL queries
+    -->
+    <springProfile name="dev">
+        <root level="INFO">
+            <appender-ref ref="ASYNC_CONSOLE" />
+            <appender-ref ref="ASYNC_FILE" />
+        </root>
+        <logger name="com.mycompany.api.account" level="DEBUG" />
+        <logger name="org.springframework.web" level="DEBUG" />
+        <logger name="org.hibernate.SQL" level="DEBUG" />
+        <logger name="org.hibernate.type.descriptor.sql.BasicBinder" level="TRACE" />
+    </springProfile>
+
+    <!--
+      Production Profile: INFO level for important events only
+      - Console + File output (Docker/K8s + VMs)
+      - INFO for our code
+      - WARN for libraries (reduce noise)
+    -->
+    <springProfile name="prod">
+        <root level="WARN">
+            <appender-ref ref="ASYNC_CONSOLE" />
+            <appender-ref ref="ASYNC_FILE" />
+        </root>
+        <logger name="com.mycompany.api.account" level="INFO" />
+        <logger name="org.springframework" level="WARN" />
+        <logger name="org.hibernate" level="WARN" />
+    </springProfile>
+
+</configuration>

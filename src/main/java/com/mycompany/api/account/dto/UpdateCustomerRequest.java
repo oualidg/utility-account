@@ -30,7 +30,8 @@ public record UpdateCustomerRequest(
         @Size(max = 100, message = "Email must not exceed 100 characters")
         String email,
 
-        @Pattern(regexp = "^\\+?[0-9]{7,15}$", message = "Mobile number must be 7-15 digits, optionally starting with +")
+        @Size(max = 15, message = "Mobile number must not exceed 15 characters")
+        @Pattern(regexp = "^\\+?[0-9]{7,14}$", message = "Mobile number must be 7-14 digits, optionally with + prefix")
         String mobileNumber
 ) {
 }

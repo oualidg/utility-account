@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Logback configuration for TEST environment
+
+  Purpose: Keep tests completely SILENT for clean test output
+
+  This file takes priority over logback-spring.xml during test execution.
+
+  Benefits:
+  - No console noise during tests
+  - No file I/O (faster tests)
+  - Clean Maven/JUnit output
+  - Easy to debug: mvn test -Dlogging.level.root=DEBUG
+
+  Author: Oualid Gharach
+  Created: 2026-02-14
+-->
+<configuration>
+
+    <!--
+      Completely suppress all logging during tests.
+
+      This ensures:
+      - Fast test execution (no logging overhead)
+      - Clean test reports (only test results visible)
+      - No file creation (no cleanup needed)
+
+      To enable logging for debugging a specific test:
+      mvn test -Dtest=PaymentServiceIntegrationTest -Dlogging.level.root=DEBUG
+
+      Or in your IDE, add VM argument:
+      -Dlogging.level.root=DEBUG
+    -->
+    <root level="OFF">
+        <!-- No appenders = no output -->
+    </root>
+
+</configuration>

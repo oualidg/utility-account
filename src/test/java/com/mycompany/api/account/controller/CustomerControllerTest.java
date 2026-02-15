@@ -33,6 +33,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
@@ -54,6 +55,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * @author Oualid Gharach
  */
 @WebMvcTest(CustomerController.class)
+@TestPropertySource(properties = "spring.main.banner-mode=off")
 @DisplayName("CustomerController Unit Tests")
 class CustomerControllerTest {
 
@@ -190,6 +192,29 @@ class CustomerControllerTest {
 
         // Service should NOT be called due to validation failure
         verify(customerService, never()).getCustomer(any());
+    }
+
+    @Test
+    @DisplayName("POST /api/v1/customers - Should return 400 when mobile number exceeds 15 characters")
+    void shouldReturnBadRequestWhenMobileNumberTooLong() throws Exception {
+        // Given - Mobile number with 16 characters (exceeds database VARCHAR(15) limit)
+        CreateCustomerRequest invalidRequest = new CreateCustomerRequest(
+                "John",
+                "Doe",
+                "john@example.com",
+                "+672241710414586"  // 16 characters (bug we fixed!)
+        );
+
+        // When & Then
+        mockMvc.perform(post("/api/v1/customers")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(invalidRequest)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.validationErrors.mobileNumber").exists());
+
+        // Service should never be called due to validation failure
+        verify(customerService, never()).createCustomer(any(CreateCustomerRequest.class));
     }
 
     @Test
