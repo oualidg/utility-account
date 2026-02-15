@@ -10,6 +10,7 @@
  */
 package com.mycompany.api.account.service;
 
+import com.mycompany.api.account.BaseIntegrationTest;
 import com.mycompany.api.account.dto.DepositRequest;
 import com.mycompany.api.account.entity.Account;
 import com.mycompany.api.account.entity.Customer;
@@ -24,9 +25,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.ActiveProfiles;
 
 import java.math.BigDecimal;
 
@@ -39,10 +38,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  *
  * @author Oualid Gharach
  */
-@SpringBootTest
-@ActiveProfiles("test")
 @DisplayName("PaymentService Integration Tests")
-class PaymentServiceIntegrationTest {
+class PaymentServiceIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private PaymentService paymentService;

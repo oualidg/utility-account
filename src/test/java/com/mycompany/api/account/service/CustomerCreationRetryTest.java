@@ -20,6 +20,7 @@
  */
 package com.mycompany.api.account.service;
 
+import com.mycompany.api.account.BaseIntegrationTest;
 import com.mycompany.api.account.dto.CreateCustomerRequest;
 import com.mycompany.api.account.dto.CustomerDetailedResponse;
 import com.mycompany.api.account.util.LuhnGenerator;
@@ -27,9 +28,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -45,10 +44,8 @@ import static org.mockito.Mockito.when;
  *
  * @author Oualid Gharach
  */
-@SpringBootTest
-@ActiveProfiles("test")
 @DisplayName("Customer Creation Retry Tests")
-class CustomerCreationRetryTest {
+class CustomerCreationRetryTest extends BaseIntegrationTest {
 
     @Autowired
     private CustomerService customerService;
