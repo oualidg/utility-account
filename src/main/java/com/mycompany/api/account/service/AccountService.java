@@ -12,12 +12,14 @@ package com.mycompany.api.account.service;
 
 import com.mycompany.api.account.entity.Account;
 import com.mycompany.api.account.entity.Customer;
+import com.mycompany.api.account.exception.BalanceUpdateException;
 import com.mycompany.api.account.exception.DuplicateResourceException;
 import com.mycompany.api.account.exception.ResourceNotFoundException;
 import com.mycompany.api.account.repository.AccountRepository;
 import com.mycompany.api.account.util.LuhnGenerator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -153,23 +155,30 @@ public class AccountService {
      */
     @Transactional
     public void updateBalance(Account account, BigDecimal amount) {
-        int updated = accountRepository.updateBalanceAtomic(
-                account.getAccountNumber(),
-                amount
-        );
+        try {
+            int updated = accountRepository.updateBalanceAtomic(
+                    account.getAccountNumber(),
+                    amount
+            );
 
-        if (updated == 0) {
-            // This should rarely happen due to FK constraints and transaction scope,
-            // but provides safety in case account was deleted or deactivated concurrently
-            log.error("Failed to update balance - account may have been deleted: accountNumber={}",
-                    account.getAccountNumber());
-            throw new ResourceNotFoundException(
-                    "Unable to update account balance - account not found or inactive: " +
-                            account.getAccountNumber()
+            if (updated == 0) {
+                log.error("Failed to update balance - account may have been deleted: accountNumber={}",
+                        account.getAccountNumber());
+                throw new ResourceNotFoundException(
+                        "Unable to update account balance - account not found or inactive: " +
+                                account.getAccountNumber()
+                );
+            }
+
+            log.info("Account balance updated atomically: accountNumber={}, amount={}",
+                    account.getAccountNumber(), amount);
+
+        } catch (DataIntegrityViolationException e) {
+            log.warn("Balance update failed for accountNumber={}, amount={}: {}",
+                    account.getAccountNumber(), amount, e.getMostSpecificCause().getMessage());
+            throw new BalanceUpdateException(
+                    "Balance update failed for account: " + account.getAccountNumber()
             );
         }
-
-        log.info("Account balance updated atomically: accountNumber={}, amount={}",
-                account.getAccountNumber(), amount);
     }
 }

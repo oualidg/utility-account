@@ -14,7 +14,7 @@ import com.mycompany.api.account.dto.PaymentResponse;
 import com.mycompany.api.account.entity.Account;
 import com.mycompany.api.account.entity.Customer;
 import com.mycompany.api.account.entity.Payment;
-import com.mycompany.api.account.model.PaymentProvider;
+import com.mycompany.api.account.entity.PaymentProvider;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -58,7 +58,8 @@ class PaymentMapperTest {
                 .as("Should extract account number from nested account entity")
                 .isEqualTo(1234567890L);
         assertThat(response.amount()).isEqualByComparingTo(new BigDecimal("10.00"));
-        assertThat(response.paymentProvider()).isEqualTo(PaymentProvider.MPESA);
+        assertThat(response.providerCode()).isEqualTo("MPESA");
+        assertThat(response.providerName()).isEqualTo("M-Pesa");
         assertThat(response.paymentReference()).isEqualTo("TEST-REF");
         assertThat(response.paymentDate())
                 .as("Payment date should be exact Instant without timezone conversion")
@@ -70,19 +71,16 @@ class PaymentMapperTest {
     @DisplayName("Should map all payment providers correctly")
     void shouldMapAllPaymentProviders() {
         // Test MPESA
-        Payment mpesaPayment = createPaymentWithProvider(PaymentProvider.MPESA);
+        Payment mpesaPayment = createPaymentWithProvider(createProvider(1L, "MPESA", "M-Pesa"));
         PaymentResponse mpesaResponse = paymentMapper.toResponse(mpesaPayment);
-        assertThat(mpesaResponse.paymentProvider()).isEqualTo(PaymentProvider.MPESA);
+        assertThat(mpesaResponse.providerCode()).isEqualTo("MPESA");
+        assertThat(mpesaResponse.providerName()).isEqualTo("M-Pesa");
 
-        // Test MTN_MOMO
-        Payment mtnPayment = createPaymentWithProvider(PaymentProvider.MTN_MOMO);
+        // Test MTN
+        Payment mtnPayment = createPaymentWithProvider(createProvider(2L, "MTN", "MTN Mobile Money"));
         PaymentResponse mtnResponse = paymentMapper.toResponse(mtnPayment);
-        assertThat(mtnResponse.paymentProvider()).isEqualTo(PaymentProvider.MTN_MOMO);
-
-        // Test AIRTEL_MONEY
-        Payment airtelPayment = createPaymentWithProvider(PaymentProvider.AIRTEL_MONEY);
-        PaymentResponse airtelResponse = paymentMapper.toResponse(airtelPayment);
-        assertThat(airtelResponse.paymentProvider()).isEqualTo(PaymentProvider.AIRTEL_MONEY);
+        assertThat(mtnResponse.providerCode()).isEqualTo("MTN");
+        assertThat(mtnResponse.providerName()).isEqualTo("MTN Mobile Money");
     }
 
     @Test
@@ -125,6 +123,17 @@ class PaymentMapperTest {
     // Helper Methods
     // =========================================================================
 
+    private PaymentProvider createProvider(Long id, String code, String name) {
+        PaymentProvider provider = new PaymentProvider();
+        provider.setId(id);
+        provider.setCode(code);
+        provider.setName(name);
+        provider.setApiKeyHash("hash");
+        provider.setApiKeyPrefix("prefix");
+        provider.setActive(true);
+        return provider;
+    }
+
     private Payment createBasicPayment() {
         Customer customer = new Customer();
         customer.setCustomerId(12345670L);
@@ -138,7 +147,7 @@ class PaymentMapperTest {
         payment.setReceiptNumber("019c4d54-0000-0000-0000-000000000000");
         payment.setAccount(account);
         payment.setAmount(new BigDecimal("10.00"));
-        payment.setPaymentProvider(PaymentProvider.MPESA);
+        payment.setPaymentProvider(createProvider(1L, "MPESA", "M-Pesa"));
         payment.setPaymentReference("TEST-REF");
         payment.setPaymentDate(Instant.parse("2026-02-11T10:15:30.123456789Z"));
 

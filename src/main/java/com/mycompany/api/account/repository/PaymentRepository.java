@@ -11,8 +11,9 @@
 package com.mycompany.api.account.repository;
 
 import com.mycompany.api.account.entity.Payment;
-import com.mycompany.api.account.model.PaymentProvider;
+import com.mycompany.api.account.entity.PaymentProvider;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
@@ -27,14 +28,19 @@ import java.util.Optional;
 public interface PaymentRepository extends JpaRepository<Payment, String> {
 
     /**
-     * Find payment by provider and reference (for idempotency check).
-     * Used to prevent duplicate payment processing.
+     * Find payment by provider and reference with eager fetch of provider and account.
+     * Used for confirmation queries where the full payment details are needed outside
+     * a transaction boundary.
      *
-     * @param provider payment provider
+     * @param provider payment provider entity
      * @param reference payment reference from provider
-     * @return optional containing payment if already exists
+     * @return optional containing fully loaded payment
      */
-    Optional<Payment> findByPaymentProviderAndPaymentReference(
+    @Query("SELECT p FROM Payment p " +
+            "JOIN FETCH p.paymentProvider " +
+            "JOIN FETCH p.account " +
+            "WHERE p.paymentProvider = :provider AND p.paymentReference = :reference")
+    Optional<Payment> findByProviderAndReferenceWithDetails(
             PaymentProvider provider,
             String reference
     );

@@ -1,0 +1,80 @@
+databaseChangeLog:
+  - changeSet:
+      id: 003-create-payment-providers-table
+      author: oualid.gharach
+      changes:
+        - createTable:
+            tableName: payment_providers
+            columns:
+              - column:
+                  name: id
+                  type: BIGINT
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: code
+                  type: VARCHAR(50)
+                  constraints:
+                    nullable: false
+                    unique: true
+              - column:
+                  name: name
+                  type: VARCHAR(100)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: api_key_hash
+                  type: VARCHAR(255)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: api_key_prefix
+                  type: VARCHAR(8)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: active
+                  type: BOOLEAN
+                  defaultValueBoolean: true
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: TIMESTAMP
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+
+  - changeSet:
+      id: 003-seed-dev-payment-providers
+      author: oualid.gharach
+      context: dev
+      comment: >
+        Seed payment providers with dev API keys for local development.
+        MPESA dev key: e7e75fe1-4192-4e34-af5e-6010d787c029 (SHA-256 hashed)
+        MTN dev key: 0df87c1d-2dde-4a08-8f9f-7739b471073a (SHA-256 hashed)
+      changes:
+        - insert:
+            tableName: payment_providers
+            columns:
+              - column: { name: code, value: "MPESA" }
+              - column: { name: name, value: "M-Pesa" }
+              - column: { name: api_key_hash, value: "59e043f0424f97e15a3ca18a71329dd48beed0085fcc137e25fd74f8da6a8738" }
+              - column: { name: api_key_prefix, value: "e7e75fe1" }
+              - column: { name: active, valueBoolean: true }
+        - insert:
+            tableName: payment_providers
+            columns:
+              - column: { name: code, value: "MTN" }
+              - column: { name: name, value: "MTN Mobile Money" }
+              - column: { name: api_key_hash, value: "dff3275e5484cf1dcd101e5a2e226081d7383af96cebfbec01e187c265872c77" }
+              - column: { name: api_key_prefix, value: "0df87c1d" }
+              - column: { name: active, valueBoolean: true }

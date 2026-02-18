@@ -31,5 +31,7 @@ public interface PaymentMapper {
      * @return payment response
      */
     @Mapping(source = "account.accountNumber", target = "accountNumber")
+    @Mapping(source = "paymentProvider.code", target = "providerCode")
+    @Mapping(source = "paymentProvider.name", target = "providerName")
     PaymentResponse toResponse(Payment payment);
 }

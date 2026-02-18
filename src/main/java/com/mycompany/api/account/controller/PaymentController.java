@@ -13,12 +13,14 @@ package com.mycompany.api.account.controller;
 import com.mycompany.api.account.dto.DepositRequest;
 import com.mycompany.api.account.dto.PaymentResponse;
 import com.mycompany.api.account.entity.Payment;
+import com.mycompany.api.account.entity.PaymentProvider;
+import com.mycompany.api.account.filter.ApiKeyAuthFilter;
 import com.mycompany.api.account.mapper.PaymentMapper;
-import com.mycompany.api.account.model.PaymentProvider;
 import com.mycompany.api.account.service.PaymentService;
 import com.mycompany.api.account.validation.ValidLuhn;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,6 +30,10 @@ import org.springframework.web.bind.annotation.*;
 /**
  * REST controller for payment operations.
  * Handles deposit transactions and payment confirmations.
+ *
+ * <p>All endpoints require API key authentication via the {@code X-API-Key} header.
+ * The authenticated provider is resolved by {@link ApiKeyAuthFilter} and stored
+ * as a request attribute.</p>
  *
  * @author Oualid Gharach
  */
@@ -47,6 +53,7 @@ public class PaymentController {
      *
      * @param accountNumber account number (10-digit Luhn)
      * @param request deposit request
+     * @param httpRequest servlet request containing authenticated provider
      * @return payment response with receipt
      */
     @PostMapping("/accounts/{accountNumber}/payments")
@@ -54,12 +61,15 @@ public class PaymentController {
     public ResponseEntity<PaymentResponse> depositToAccount(
             @PathVariable @ValidLuhn(length = 10, message = "Account number must be a valid 10-digit number with checksum")
             Long accountNumber,
-            @Valid @RequestBody DepositRequest request) {
+            @Valid @RequestBody DepositRequest request,
+            HttpServletRequest httpRequest) {
+
+        PaymentProvider provider = getAuthenticatedProvider(httpRequest);
 
         log.info("Deposit to account request received: accountNumber={}, provider={}, reference={}, amount={}",
-                accountNumber, request.paymentProvider(), request.paymentReference(), request.amount());
+                accountNumber, provider.getCode(), request.paymentReference(), request.amount());
 
-        Payment payment = paymentService.depositToAccount(accountNumber, request);
+        Payment payment = paymentService.depositToAccount(accountNumber, request, provider);
 
         log.info("Deposit successful: receipt={}, accountNumber={}",
                 payment.getReceiptNumber(), accountNumber);
@@ -72,6 +82,7 @@ public class PaymentController {
      *
      * @param customerId customer ID (8-digit Luhn)
      * @param request deposit request
+     * @param httpRequest servlet request containing authenticated provider
      * @return payment response with receipt
      */
     @PostMapping("/customers/{customerId}/payments")
@@ -79,12 +90,15 @@ public class PaymentController {
     public ResponseEntity<PaymentResponse> depositToMainAccount(
             @PathVariable @ValidLuhn(length = 8, message = "Customer ID must be a valid 8-digit number with checksum")
             Long customerId,
-            @Valid @RequestBody DepositRequest request) {
+            @Valid @RequestBody DepositRequest request,
+            HttpServletRequest httpRequest) {
+
+        PaymentProvider provider = getAuthenticatedProvider(httpRequest);
 
         log.info("Deposit to main account request received: customerId={}, provider={}, reference={}, amount={}",
-                customerId, request.paymentProvider(), request.paymentReference(), request.amount());
+                customerId, provider.getCode(), request.paymentReference(), request.amount());
 
-        Payment payment = paymentService.depositToMainAccount(customerId, request);
+        Payment payment = paymentService.depositToMainAccount(customerId, request, provider);
 
         log.info("Deposit to main account successful: receipt={}, customerId={}",
                 payment.getReceiptNumber(), customerId);
@@ -93,28 +107,35 @@ public class PaymentController {
     }
 
     /**
-     * Confirm payment by provider and reference.
-     * Used to check if payment was processed (e.g., after timeout).
+     * Confirm payment by reference.
+     * Provider is identified by the API key.
      *
-     * @param provider payment provider
      * @param reference payment reference
+     * @param httpRequest servlet request containing authenticated provider
      * @return payment response if found, 404 if not found
-     * @throws IllegalArgumentException if provider is invalid (caught by GlobalExceptionHandler)
      */
-    @GetMapping("/payments/confirmation/{provider}/{reference}")
-    @Operation(summary = "Confirm payment", description = "Check payment status by provider and reference")
+    @GetMapping("/payments/confirmation/{reference}")
+    @Operation(summary = "Confirm payment", description = "Check payment status by reference")
     public ResponseEntity<PaymentResponse> confirmPayment(
-            @PathVariable("provider") PaymentProvider provider,
-            @PathVariable String reference) {
+            @PathVariable String reference,
+            HttpServletRequest httpRequest) {
 
-        log.info("Payment confirmation request: provider={}, reference={}", provider, reference);
+        PaymentProvider provider = getAuthenticatedProvider(httpRequest);
+
+        log.info("Payment confirmation request: provider={}, reference={}", provider.getCode(), reference);
 
         Payment payment = paymentService.getPaymentByReference(provider, reference);
 
         log.info("Payment found: receipt={}, provider={}, reference={}",
-                payment.getReceiptNumber(), provider, reference);
+                payment.getReceiptNumber(), provider.getCode(), reference);
 
         return ResponseEntity.ok(paymentMapper.toResponse(payment));
     }
 
+    /**
+     * Extract the authenticated provider from the request attribute set by ApiKeyAuthFilter.
+     */
+    private PaymentProvider getAuthenticatedProvider(HttpServletRequest request) {
+        return (PaymentProvider) request.getAttribute(ApiKeyAuthFilter.PROVIDER_ATTRIBUTE);
+    }
 }

@@ -10,7 +10,6 @@
  */
 package com.mycompany.api.account.entity;
 
-import com.mycompany.api.account.model.PaymentProvider;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -54,8 +53,8 @@ public class Payment implements Persistable<String> {
     @Column(name = "amount", nullable = false, precision = 15, scale = 2)
     private BigDecimal amount;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "payment_provider", nullable = false, length = 20)
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "provider_id", nullable = false)
     private PaymentProvider paymentProvider;
 
     /**

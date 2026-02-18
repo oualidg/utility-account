@@ -8,16 +8,6 @@
  *
  * Feel free to use or contribute. Contact: oualid.gharach@gmail.com
  */
-/*
- * Copyright (c) 2026 Oualid Gharach. All rights reserved.
- *
- * Aiming for production-grade standards through clean code and best practices
- * for educational and informational purposes.
- *
- * Created on: 2/5/2026 at 12:40 PM
- *
- * Feel free to use or contribute. Contact: oualid.gharach@gmail.com
- */
 package com.mycompany.api.account.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -28,6 +18,7 @@ import com.mycompany.api.account.dto.UpdateCustomerRequest;
 import com.mycompany.api.account.exception.DuplicateResourceException;
 import com.mycompany.api.account.exception.ResourceNotFoundException;
 import com.mycompany.api.account.service.CustomerService;
+import com.mycompany.api.account.service.PaymentProviderService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -67,6 +58,9 @@ class CustomerControllerTest {
 
     @MockitoBean
     private CustomerService customerService;
+
+    @MockitoBean
+    private PaymentProviderService providerService;
 
     private CustomerDetailedResponse sampleCustomerResponse;
     private CreateCustomerRequest sampleCreateRequest;

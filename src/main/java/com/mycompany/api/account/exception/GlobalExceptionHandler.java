@@ -148,6 +148,26 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * Handles BalanceUpdateException (422 Unprocessable Entity)
+     * Thrown when an account balance update fails.
+     */
+    @ExceptionHandler(BalanceUpdateException.class)
+    public ResponseEntity<ErrorResponse> handleBalanceUpdate(
+            BalanceUpdateException ex,
+            HttpServletRequest request) {
+
+        log.warn("Balance update failed: {}", ex.getMessage());
+
+        ErrorResponse errorResponse = ErrorResponse.of(
+                HttpStatus.UNPROCESSABLE_ENTITY,
+                ex.getMessage(),
+                request.getRequestURI()
+        );
+
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(errorResponse);
+    }
+
+    /**
      * Handles IllegalArgumentException (400 Bad Request)
      * Thrown for invalid input arguments.
      */

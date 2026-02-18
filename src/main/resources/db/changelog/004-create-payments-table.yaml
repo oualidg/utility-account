@@ -1,7 +1,7 @@
 databaseChangeLog:
   - changeSet:
-      id: 003-create-payments-table
-      author: Oualid Gharach
+      id: 004-create-payments-table
+      author: oualid.gharach
       changes:
         - createTable:
             tableName: payments
@@ -18,13 +18,13 @@ databaseChangeLog:
                   constraints:
                     nullable: false
               - column:
-                  name: amount
-                  type: DECIMAL(15,2)
+                  name: provider_id
+                  type: BIGINT
                   constraints:
                     nullable: false
               - column:
-                  name: payment_provider
-                  type: VARCHAR(20)
+                  name: amount
+                  type: DECIMAL(15,2)
                   constraints:
                     nullable: false
               - column:
@@ -46,9 +46,17 @@ databaseChangeLog:
             referencedColumnNames: account_number
             onDelete: RESTRICT
 
+        - addForeignKeyConstraint:
+            baseTableName: payments
+            baseColumnNames: provider_id
+            constraintName: fk_payment_provider
+            referencedTableName: payment_providers
+            referencedColumnNames: id
+            onDelete: RESTRICT
+
         - addUniqueConstraint:
             tableName: payments
-            columnNames: payment_provider, payment_reference
+            columnNames: provider_id, payment_reference
             constraintName: uk_payment_provider_reference
 
         - createIndex:

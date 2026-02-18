@@ -8,23 +8,13 @@
  *
  * Feel free to use or contribute. Contact: oualid.gharach@gmail.com
  */
-/*
- * Copyright (c) 2026 Oualid Gharach. All rights reserved.
- *
- * Aiming for production-grade standards through clean code and best practices
- * for educational and informational purposes.
- *
- * Created on: 2/7/2026 at 1:23 PM
- *
- * Feel free to use or contribute. Contact: oualid.gharach@gmail.com
- */
 package com.mycompany.api.account.service;
 
 import com.mycompany.api.account.dto.DepositRequest;
 import com.mycompany.api.account.entity.Payment;
+import com.mycompany.api.account.entity.PaymentProvider;
 import com.mycompany.api.account.exception.DuplicateResourceException;
 import com.mycompany.api.account.exception.ResourceNotFoundException;
-import com.mycompany.api.account.model.PaymentProvider;
 import com.mycompany.api.account.repository.PaymentRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -66,18 +56,20 @@ public class PaymentService {
      *
      * @param customerId customer ID
      * @param request deposit request
+     * @param provider authenticated payment provider
      * @return payment entity (new or existing)
      */
-    public Payment depositToMainAccount(Long customerId, DepositRequest request) {
+    public Payment depositToMainAccount(Long customerId, DepositRequest request,
+                                        PaymentProvider provider) {
         try {
-            return transactionHelper.executeDeposit(request,
+            return transactionHelper.executeDeposit(request, provider,
                     () -> accountService.getMainAccount(customerId),
                     "customerId=" + customerId);
         } catch (DataIntegrityViolationException e) {
             log.debug("Constraint violation caught, looking up existing payment: {}", e.getMessage());
             // Resolve the main account number for the idempotency mismatch check.
             Long mainAccountNumber = accountService.getMainAccount(customerId).getAccountNumber();
-            return handleDuplicatePayment(request, mainAccountNumber, "customerId=" + customerId);
+            return handleDuplicatePayment(request, provider, mainAccountNumber, "customerId=" + customerId);
         }
     }
 
@@ -87,32 +79,34 @@ public class PaymentService {
      *
      * @param accountNumber account number
      * @param request deposit request
+     * @param provider authenticated payment provider
      * @return payment entity (new or existing)
      */
-    public Payment depositToAccount(Long accountNumber, DepositRequest request) {
+    public Payment depositToAccount(Long accountNumber, DepositRequest request,
+                                    PaymentProvider provider) {
         try {
-            return transactionHelper.executeDeposit(request,
+            return transactionHelper.executeDeposit(request, provider,
                     () -> accountService.getAccount(accountNumber),
                     "accountNumber=" + accountNumber);
         } catch (DataIntegrityViolationException e) {
             log.debug("Constraint violation caught, looking up existing payment: {}", e.getMessage());
-            return handleDuplicatePayment(request, accountNumber, "accountNumber=" + accountNumber);
+            return handleDuplicatePayment(request, provider, accountNumber, "accountNumber=" + accountNumber);
         }
     }
 
     /**
      * Get payment by provider and reference (for confirmation).
      *
-     * @param provider payment provider
+     * @param provider authenticated payment provider
      * @param reference payment reference
      * @return payment entity if found
      */
     @Transactional(readOnly = true)
     public Payment getPaymentByReference(PaymentProvider provider, String reference) {
         return paymentRepository
-                .findByPaymentProviderAndPaymentReference(provider, reference)
+                .findByProviderAndReferenceWithDetails(provider, reference)
                 .orElseThrow(() -> new ResourceNotFoundException(
-                        "Payment not found with provider " + provider + " and reference " + reference
+                        "Payment not found with provider " + provider.getCode() + " and reference " + reference
                 ));
     }
 
@@ -126,21 +120,22 @@ public class PaymentService {
      * not a legitimate retry.</p>
      *
      * @param request the incoming deposit request
+     * @param provider the authenticated payment provider
      * @param targetAccountNumber the account number the caller intended to deposit to
      * @param logContext contextual info for log messages
      * @return the existing payment if it matches the request
      * @throws DuplicateResourceException if the request doesn't match the existing payment
      */
-    private Payment handleDuplicatePayment(DepositRequest request, Long targetAccountNumber,
-                                           String logContext) {
+    private Payment handleDuplicatePayment(DepositRequest request, PaymentProvider provider,
+                                           Long targetAccountNumber, String logContext) {
 
         log.info("Duplicate payment detected for {}, reference={}", logContext, request.paymentReference());
 
         Payment existing = transactionHelper
-                .findByProviderAndReference(request.paymentProvider(), request.paymentReference())
+                .findByProviderAndReference(provider, request.paymentReference())
                 .orElseThrow(() -> {
                     log.error("Constraint violation confirmed duplicate but lookup failed: provider={}, reference={}",
-                            request.paymentProvider(), request.paymentReference());
+                            provider.getCode(), request.paymentReference());
                     return new DuplicateResourceException(
                             "Payment with reference " + request.paymentReference()
                                     + " already exists. Use the confirmation endpoint to retrieve it."

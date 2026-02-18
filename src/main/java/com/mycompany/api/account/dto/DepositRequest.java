@@ -10,7 +10,6 @@
  */
 package com.mycompany.api.account.dto;
 
-import com.mycompany.api.account.model.PaymentProvider;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Digits;
@@ -31,9 +30,6 @@ public record DepositRequest(
         @DecimalMax(value = "9999999999999.99", message = "Amount exceeds maximum allowed value")
         @Digits(integer = 13, fraction = 2, message = "Amount must have at most 2 decimal places")
         BigDecimal amount,
-
-        @NotNull(message = "Payment provider is required")
-        PaymentProvider paymentProvider,
 
         @NotBlank(message = "Payment reference is required")
         String paymentReference

@@ -13,7 +13,7 @@ package com.mycompany.api.account.service;
 import com.mycompany.api.account.dto.DepositRequest;
 import com.mycompany.api.account.entity.Account;
 import com.mycompany.api.account.entity.Payment;
-import com.mycompany.api.account.model.PaymentProvider;
+import com.mycompany.api.account.entity.PaymentProvider;
 import com.mycompany.api.account.repository.PaymentRepository;
 import com.mycompany.api.account.util.UuidGenerator;
 import lombok.RequiredArgsConstructor;
@@ -64,17 +64,18 @@ public class PaymentTransactionHelper {
      * @return the persisted payment entity
      */
     @Transactional
-    public Payment executeDeposit(DepositRequest request, Supplier<Account> accountLookup, String logContext) {
+    public Payment executeDeposit(DepositRequest request, PaymentProvider provider,
+                                  Supplier<Account> accountLookup, String logContext) {
 
         log.info("Processing deposit {}, provider={}, reference={}, amount={}",
-                logContext, request.paymentProvider(), request.paymentReference(), request.amount());
+                logContext, provider.getCode(), request.paymentReference(), request.amount());
 
         // 1. Resolve account and validate customer is active
         Account account = accountLookup.get();
 
         // 2. Insert payment — saveAndFlush forces immediate INSERT,
         //    triggering the unique constraint check before we update the balance
-        Payment payment = createPayment(account, request);
+        Payment payment = createPayment(account, provider, request);
 
         // 3. Update balance atomically (only reached if INSERT succeeded)
         accountService.updateBalance(account, request.amount());
@@ -95,20 +96,20 @@ public class PaymentTransactionHelper {
      */
     @Transactional(readOnly = true)
     public Optional<Payment> findByProviderAndReference(PaymentProvider provider, String reference) {
-        return paymentRepository.findByPaymentProviderAndPaymentReference(provider, reference);
+        return paymentRepository.findByProviderAndReferenceWithDetails(provider, reference);
     }
 
     /**
      * Create payment entity and persist immediately.
      */
-    private Payment createPayment(Account account, DepositRequest request) {
+    private Payment createPayment(Account account, PaymentProvider provider, DepositRequest request) {
         String receiptNumber = uuidGenerator.generate();
 
         Payment payment = new Payment();
         payment.setReceiptNumber(receiptNumber);
         payment.setAccount(account);
         payment.setAmount(request.amount());
-        payment.setPaymentProvider(request.paymentProvider());
+        payment.setPaymentProvider(provider);
         payment.setPaymentReference(request.paymentReference());
         // paymentDate set by @PrePersist
 

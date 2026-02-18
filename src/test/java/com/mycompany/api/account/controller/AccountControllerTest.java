@@ -17,6 +17,7 @@ import com.mycompany.api.account.entity.Customer;
 import com.mycompany.api.account.exception.ResourceNotFoundException;
 import com.mycompany.api.account.mapper.AccountMapper;
 import com.mycompany.api.account.service.AccountService;
+import com.mycompany.api.account.service.PaymentProviderService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mapstruct.factory.Mappers;
@@ -55,6 +56,9 @@ class AccountControllerTest {
 
     @MockitoBean
     private AccountMapper accountMapper;
+
+    @MockitoBean
+    private PaymentProviderService providerService;
 
     // Real mapper instance for creating test responses
     private final AccountMapper realMapper = Mappers.getMapper(AccountMapper.class);

@@ -15,11 +15,12 @@ import com.mycompany.api.account.dto.DepositRequest;
 import com.mycompany.api.account.entity.Account;
 import com.mycompany.api.account.entity.Customer;
 import com.mycompany.api.account.entity.Payment;
+import com.mycompany.api.account.entity.PaymentProvider;
 import com.mycompany.api.account.exception.DuplicateResourceException;
 import com.mycompany.api.account.exception.ResourceNotFoundException;
-import com.mycompany.api.account.model.PaymentProvider;
 import com.mycompany.api.account.repository.AccountRepository;
 import com.mycompany.api.account.repository.CustomerRepository;
+import com.mycompany.api.account.repository.PaymentProviderRepository;
 import com.mycompany.api.account.repository.PaymentRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -54,10 +55,15 @@ class PaymentServiceIntegrationTest extends BaseIntegrationTest {
     private PaymentRepository paymentRepository;
 
     @Autowired
+    private PaymentProviderRepository providerRepository;
+
+    @Autowired
     private JdbcTemplate jdbcTemplate;
 
     private Customer testCustomer;
     private Account testAccount;
+    private PaymentProvider mpesaProvider;
+    private PaymentProvider mtnProvider;
 
     @BeforeEach
     void setUp() {
@@ -65,6 +71,11 @@ class PaymentServiceIntegrationTest extends BaseIntegrationTest {
         jdbcTemplate.execute("DELETE FROM payments");
         jdbcTemplate.execute("DELETE FROM accounts");
         jdbcTemplate.execute("DELETE FROM customers");
+        jdbcTemplate.execute("DELETE FROM payment_providers");
+
+        // Seed test providers
+        mpesaProvider = seedProvider("MPESA", "M-Pesa", "mpesa-test-hash", "mpesa123");
+        mtnProvider = seedProvider("MTN", "MTN Mobile Money", "mtn-test-hash", "mtn12345");
 
         // Create test customer
         testCustomer = new Customer();
@@ -84,6 +95,16 @@ class PaymentServiceIntegrationTest extends BaseIntegrationTest {
         testAccount = accountRepository.save(testAccount);
     }
 
+    private PaymentProvider seedProvider(String code, String name, String apiKeyHash, String apiKeyPrefix) {
+        PaymentProvider provider = new PaymentProvider();
+        provider.setCode(code);
+        provider.setName(name);
+        provider.setApiKeyHash(apiKeyHash);
+        provider.setApiKeyPrefix(apiKeyPrefix);
+        provider.setActive(true);
+        return providerRepository.save(provider);
+    }
+
     // =========================================================================
     // depositToAccount Tests
     // =========================================================================
@@ -94,19 +115,18 @@ class PaymentServiceIntegrationTest extends BaseIntegrationTest {
         // Given
         DepositRequest request = new DepositRequest(
                 new BigDecimal("100.00"),
-                PaymentProvider.MPESA,
                 "MPESA-REF-12345"
         );
 
         // When
-        Payment payment = paymentService.depositToAccount(testAccount.getAccountNumber(), request);
+        Payment payment = paymentService.depositToAccount(testAccount.getAccountNumber(), request, mpesaProvider);
 
         // Then
         assertThat(payment).isNotNull();
         assertThat(payment.getReceiptNumber()).isNotNull();
         assertThat(payment.getAccount().getAccountNumber()).isEqualTo(testAccount.getAccountNumber());
         assertThat(payment.getAmount()).isEqualByComparingTo(new BigDecimal("100.00"));
-        assertThat(payment.getPaymentProvider()).isEqualTo(PaymentProvider.MPESA);
+        assertThat(payment.getPaymentProvider().getCode()).isEqualTo("MPESA");
         assertThat(payment.getPaymentReference()).isEqualTo("MPESA-REF-12345");
         assertThat(payment.getPaymentDate()).isNotNull();
 
@@ -131,10 +151,9 @@ class PaymentServiceIntegrationTest extends BaseIntegrationTest {
         // Given - First payment
         DepositRequest request1 = new DepositRequest(
                 new BigDecimal("50.00"),
-                PaymentProvider.MPESA,
                 "MPESA-REF-DUPLICATE"
         );
-        Payment payment1 = paymentService.depositToAccount(testAccount.getAccountNumber(), request1);
+        Payment payment1 = paymentService.depositToAccount(testAccount.getAccountNumber(), request1, mpesaProvider);
 
         // Get balance after first payment
         Account accountAfterFirst = accountRepository.findById(testAccount.getAccountNumber())
@@ -145,11 +164,10 @@ class PaymentServiceIntegrationTest extends BaseIntegrationTest {
 
         // When - Second payment with SAME reference AND same amount (legitimate retry)
         DepositRequest request2 = new DepositRequest(
-                new BigDecimal("50.00"),  // Same amount
-                PaymentProvider.MPESA,
-                "MPESA-REF-DUPLICATE"  // Same reference
+                new BigDecimal("50.00"),
+                "MPESA-REF-DUPLICATE"
         );
-        Payment payment2 = paymentService.depositToAccount(testAccount.getAccountNumber(), request2);
+        Payment payment2 = paymentService.depositToAccount(testAccount.getAccountNumber(), request2, mpesaProvider);
 
         // Then - Should return the FIRST payment (idempotency)
         assertThat(payment2.getReceiptNumber()).isEqualTo(payment1.getReceiptNumber());
@@ -175,18 +193,16 @@ class PaymentServiceIntegrationTest extends BaseIntegrationTest {
         // Given - First payment
         DepositRequest request1 = new DepositRequest(
                 new BigDecimal("50.00"),
-                PaymentProvider.MPESA,
                 "MPESA-REF-MISMATCH-AMT"
         );
-        paymentService.depositToAccount(testAccount.getAccountNumber(), request1);
+        paymentService.depositToAccount(testAccount.getAccountNumber(), request1, mpesaProvider);
 
         // When/Then - Second payment with same reference but different amount
         DepositRequest request2 = new DepositRequest(
-                new BigDecimal("75.00"),  // Different amount!
-                PaymentProvider.MPESA,
-                "MPESA-REF-MISMATCH-AMT"  // Same reference
+                new BigDecimal("75.00"),
+                "MPESA-REF-MISMATCH-AMT"
         );
-        assertThatThrownBy(() -> paymentService.depositToAccount(testAccount.getAccountNumber(), request2))
+        assertThatThrownBy(() -> paymentService.depositToAccount(testAccount.getAccountNumber(), request2, mpesaProvider))
                 .isInstanceOf(DuplicateResourceException.class)
                 .hasMessageContaining("already exists with different details");
     }
@@ -197,10 +213,9 @@ class PaymentServiceIntegrationTest extends BaseIntegrationTest {
         // Given - First payment to testAccount
         DepositRequest request1 = new DepositRequest(
                 new BigDecimal("50.00"),
-                PaymentProvider.MPESA,
                 "MPESA-REF-MISMATCH-ACC"
         );
-        paymentService.depositToAccount(testAccount.getAccountNumber(), request1);
+        paymentService.depositToAccount(testAccount.getAccountNumber(), request1, mpesaProvider);
 
         // Create a second account for the same customer
         Account secondAccount = new Account();
@@ -212,11 +227,10 @@ class PaymentServiceIntegrationTest extends BaseIntegrationTest {
 
         // When/Then - Same reference but targeting a different account
         DepositRequest request2 = new DepositRequest(
-                new BigDecimal("50.00"),  // Same amount
-                PaymentProvider.MPESA,
-                "MPESA-REF-MISMATCH-ACC"  // Same reference
+                new BigDecimal("50.00"),
+                "MPESA-REF-MISMATCH-ACC"
         );
-        assertThatThrownBy(() -> paymentService.depositToAccount(secondAccount.getAccountNumber(), request2))
+        assertThatThrownBy(() -> paymentService.depositToAccount(secondAccount.getAccountNumber(), request2, mpesaProvider))
                 .isInstanceOf(DuplicateResourceException.class)
                 .hasMessageContaining("already exists with different details");
     }
@@ -227,18 +241,16 @@ class PaymentServiceIntegrationTest extends BaseIntegrationTest {
         // Given - Payment with MPESA
         DepositRequest request1 = new DepositRequest(
                 new BigDecimal("50.00"),
-                PaymentProvider.MPESA,
                 "REF-12345"
         );
-        Payment payment1 = paymentService.depositToAccount(testAccount.getAccountNumber(), request1);
+        Payment payment1 = paymentService.depositToAccount(testAccount.getAccountNumber(), request1, mpesaProvider);
 
-        // When - Payment with MTN_MOMO (different provider, same reference)
+        // When - Payment with MTN (different provider, same reference)
         DepositRequest request2 = new DepositRequest(
                 new BigDecimal("75.00"),
-                PaymentProvider.MTN_MOMO,  // Different provider!
-                "REF-12345"  // Same reference!
+                "REF-12345"
         );
-        Payment payment2 = paymentService.depositToAccount(testAccount.getAccountNumber(), request2);
+        Payment payment2 = paymentService.depositToAccount(testAccount.getAccountNumber(), request2, mtnProvider);
 
         // Then - Should create NEW payment (different composite key)
         assertThat(payment2.getReceiptNumber()).isNotEqualTo(payment1.getReceiptNumber());
@@ -262,12 +274,11 @@ class PaymentServiceIntegrationTest extends BaseIntegrationTest {
         Long nonExistentAccountNumber = 9876543217L;  // Valid Luhn but doesn't exist
         DepositRequest request = new DepositRequest(
                 new BigDecimal("100.00"),
-                PaymentProvider.MPESA,
                 "MPESA-REF-12345"
         );
 
         // When & Then
-        assertThatThrownBy(() -> paymentService.depositToAccount(nonExistentAccountNumber, request))
+        assertThatThrownBy(() -> paymentService.depositToAccount(nonExistentAccountNumber, request, mpesaProvider))
                 .isInstanceOf(ResourceNotFoundException.class)
                 .hasMessageContaining("Account not found");
     }
@@ -282,18 +293,17 @@ class PaymentServiceIntegrationTest extends BaseIntegrationTest {
         // Given
         DepositRequest request = new DepositRequest(
                 new BigDecimal("200.00"),
-                PaymentProvider.MTN_MOMO,
                 "MTN-REF-67890"
         );
 
         // When
-        Payment payment = paymentService.depositToMainAccount(testCustomer.getCustomerId(), request);
+        Payment payment = paymentService.depositToMainAccount(testCustomer.getCustomerId(), request, mtnProvider);
 
         // Then
         assertThat(payment).isNotNull();
         assertThat(payment.getAccount().getAccountNumber()).isEqualTo(testAccount.getAccountNumber());
         assertThat(payment.getAmount()).isEqualByComparingTo(new BigDecimal("200.00"));
-        assertThat(payment.getPaymentProvider()).isEqualTo(PaymentProvider.MTN_MOMO);
+        assertThat(payment.getPaymentProvider().getCode()).isEqualTo("MTN");
 
         // Verify balance was updated
         Account updatedAccount = accountRepository.findById(testAccount.getAccountNumber())
@@ -310,12 +320,11 @@ class PaymentServiceIntegrationTest extends BaseIntegrationTest {
         Long nonExistentCustomerId = 99999997L;  // Valid Luhn but doesn't exist
         DepositRequest request = new DepositRequest(
                 new BigDecimal("100.00"),
-                PaymentProvider.MPESA,
                 "MPESA-REF-12345"
         );
 
         // When & Then
-        assertThatThrownBy(() -> paymentService.depositToMainAccount(nonExistentCustomerId, request))
+        assertThatThrownBy(() -> paymentService.depositToMainAccount(nonExistentCustomerId, request, mpesaProvider))
                 .isInstanceOf(ResourceNotFoundException.class)
                 .hasMessageContaining("not found");
     }
@@ -330,33 +339,26 @@ class PaymentServiceIntegrationTest extends BaseIntegrationTest {
         // Given - Create a payment
         DepositRequest request = new DepositRequest(
                 new BigDecimal("150.00"),
-                PaymentProvider.AIRTEL_MONEY,
-                "AIRTEL-REF-99999"
+                "MPESA-REF-99999"
         );
-        Payment createdPayment = paymentService.depositToAccount(testAccount.getAccountNumber(), request);
+        Payment createdPayment = paymentService.depositToAccount(testAccount.getAccountNumber(), request, mpesaProvider);
 
         // When - Retrieve it by provider and reference
-        Payment retrievedPayment = paymentService.getPaymentByReference(
-                PaymentProvider.AIRTEL_MONEY,
-                "AIRTEL-REF-99999"
-        );
+        Payment retrievedPayment = paymentService.getPaymentByReference(mpesaProvider, "MPESA-REF-99999");
 
         // Then
         assertThat(retrievedPayment).isNotNull();
         assertThat(retrievedPayment.getReceiptNumber()).isEqualTo(createdPayment.getReceiptNumber());
         assertThat(retrievedPayment.getAmount()).isEqualByComparingTo(new BigDecimal("150.00"));
-        assertThat(retrievedPayment.getPaymentProvider()).isEqualTo(PaymentProvider.AIRTEL_MONEY);
-        assertThat(retrievedPayment.getPaymentReference()).isEqualTo("AIRTEL-REF-99999");
+        assertThat(retrievedPayment.getPaymentProvider().getCode()).isEqualTo("MPESA");
+        assertThat(retrievedPayment.getPaymentReference()).isEqualTo("MPESA-REF-99999");
     }
 
     @Test
     @DisplayName("Should throw exception when payment not found")
     void shouldThrowExceptionWhenPaymentNotFound() {
         // When & Then
-        assertThatThrownBy(() -> paymentService.getPaymentByReference(
-                PaymentProvider.MPESA,
-                "NON-EXISTENT-REF"
-        ))
+        assertThatThrownBy(() -> paymentService.getPaymentByReference(mpesaProvider, "NON-EXISTENT-REF"))
                 .isInstanceOf(ResourceNotFoundException.class)
                 .hasMessageContaining("Payment not found");
     }
@@ -371,12 +373,11 @@ class PaymentServiceIntegrationTest extends BaseIntegrationTest {
         // Given
         DepositRequest request = new DepositRequest(
                 new BigDecimal("0.01"),
-                PaymentProvider.MPESA,
                 "MPESA-REF-MIN"
         );
 
         // When
-        Payment payment = paymentService.depositToAccount(testAccount.getAccountNumber(), request);
+        Payment payment = paymentService.depositToAccount(testAccount.getAccountNumber(), request, mpesaProvider);
 
         // Then
         assertThat(payment.getAmount()).isEqualByComparingTo(new BigDecimal("0.01"));
@@ -394,12 +395,11 @@ class PaymentServiceIntegrationTest extends BaseIntegrationTest {
         // Given
         DepositRequest request = new DepositRequest(
                 new BigDecimal("9999999.99"),
-                PaymentProvider.MTN_MOMO,
                 "MTN-REF-LARGE"
         );
 
         // When
-        Payment payment = paymentService.depositToAccount(testAccount.getAccountNumber(), request);
+        Payment payment = paymentService.depositToAccount(testAccount.getAccountNumber(), request, mtnProvider);
 
         // Then
         assertThat(payment.getAmount()).isEqualByComparingTo(new BigDecimal("9999999.99"));
@@ -415,14 +415,14 @@ class PaymentServiceIntegrationTest extends BaseIntegrationTest {
     @DisplayName("Should handle multiple sequential deposits")
     void shouldHandleMultipleSequentialDeposits() {
         // Given - Multiple deposits
-        DepositRequest request1 = new DepositRequest(new BigDecimal("100.00"), PaymentProvider.MPESA, "REF-1");
-        DepositRequest request2 = new DepositRequest(new BigDecimal("50.00"), PaymentProvider.MPESA, "REF-2");
-        DepositRequest request3 = new DepositRequest(new BigDecimal("25.50"), PaymentProvider.MTN_MOMO, "REF-3");
+        DepositRequest request1 = new DepositRequest(new BigDecimal("100.00"), "REF-1");
+        DepositRequest request2 = new DepositRequest(new BigDecimal("50.00"), "REF-2");
+        DepositRequest request3 = new DepositRequest(new BigDecimal("25.50"), "REF-3");
 
         // When
-        paymentService.depositToAccount(testAccount.getAccountNumber(), request1);
-        paymentService.depositToAccount(testAccount.getAccountNumber(), request2);
-        paymentService.depositToAccount(testAccount.getAccountNumber(), request3);
+        paymentService.depositToAccount(testAccount.getAccountNumber(), request1, mpesaProvider);
+        paymentService.depositToAccount(testAccount.getAccountNumber(), request2, mpesaProvider);
+        paymentService.depositToAccount(testAccount.getAccountNumber(), request3, mtnProvider);
 
         // Then
         Account updatedAccount = accountRepository.findById(testAccount.getAccountNumber())
@@ -448,12 +448,11 @@ class PaymentServiceIntegrationTest extends BaseIntegrationTest {
 
         DepositRequest request = new DepositRequest(
                 new BigDecimal("100.00"),
-                PaymentProvider.MPESA,
                 "MPESA-REF-DELETED"
         );
 
         // When & Then - Should not allow deposit to account of deleted customer
-        assertThatThrownBy(() -> paymentService.depositToAccount(testAccount.getAccountNumber(), request))
+        assertThatThrownBy(() -> paymentService.depositToAccount(testAccount.getAccountNumber(), request, mpesaProvider))
                 .isInstanceOf(ResourceNotFoundException.class)
                 .hasMessageContaining("Account not found");
     }
@@ -467,12 +466,11 @@ class PaymentServiceIntegrationTest extends BaseIntegrationTest {
 
         DepositRequest request = new DepositRequest(
                 new BigDecimal("100.00"),
-                PaymentProvider.MPESA,
                 "MPESA-REF-DELETED"
         );
 
         // When & Then - Should not allow deposit to deleted customer
-        assertThatThrownBy(() -> paymentService.depositToMainAccount(testCustomer.getCustomerId(), request))
+        assertThatThrownBy(() -> paymentService.depositToMainAccount(testCustomer.getCustomerId(), request, mpesaProvider))
                 .isInstanceOf(ResourceNotFoundException.class)
                 .hasMessageContaining("Main account not found");
     }

@@ -4,9 +4,6 @@ databaseChangeLog:
   - include:
       file: db/changelog/002-create-accounts-table.yaml
   - include:
-      file: db/changelog/003-create-payments-table.yaml
+      file: db/changelog/003-create-payment-providers-table.yaml
   - include:
-      file: db/changelog/004-add-customer-active-flag.yaml
-
-
-
+      file: db/changelog/004-create-payments-table.yaml
