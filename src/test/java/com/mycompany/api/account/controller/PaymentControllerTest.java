@@ -19,7 +19,7 @@ import com.mycompany.api.account.entity.Payment;
 import com.mycompany.api.account.entity.PaymentProvider;
 import com.mycompany.api.account.exception.ResourceNotFoundException;
 import com.mycompany.api.account.mapper.PaymentMapper;
-import com.mycompany.api.account.service.PaymentProviderService;
+import com.mycompany.api.account.service.ProviderService;
 import com.mycompany.api.account.service.PaymentService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -69,7 +69,7 @@ class PaymentControllerTest {
     private PaymentMapper paymentMapper;
 
     @MockitoBean
-    private PaymentProviderService providerService;
+    private ProviderService providerService;
 
     // =========================================================================
     // POST /api/v1/accounts/{accountNumber}/payments - Deposit to Account

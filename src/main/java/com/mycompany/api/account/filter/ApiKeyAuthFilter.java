@@ -13,7 +13,7 @@ package com.mycompany.api.account.filter;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.mycompany.api.account.dto.ErrorResponse;
 import com.mycompany.api.account.entity.PaymentProvider;
-import com.mycompany.api.account.service.PaymentProviderService;
+import com.mycompany.api.account.service.ProviderService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -54,7 +54,7 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
     public static final String API_KEY_HEADER = "X-API-Key";
     public static final String PROVIDER_ATTRIBUTE = "authenticatedProvider";
 
-    private final PaymentProviderService providerService;
+    private final ProviderService providerService;
     private final ObjectMapper objectMapper;
 
     @Override

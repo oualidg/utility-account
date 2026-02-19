@@ -54,7 +54,7 @@ public class PaymentProvider {
     private String name;
 
     /**
-     * BCrypt hash of the provider's API key.
+     * hash of the provider's API key.
      * The raw key is never stored.
      */
     @Column(name = "api_key_hash", nullable = false, length = 255)

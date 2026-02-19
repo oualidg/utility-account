@@ -52,6 +52,12 @@ databaseChangeLog:
                   defaultValueComputed: CURRENT_TIMESTAMP
                   constraints:
                     nullable: false
+        - createIndex:
+            indexName: idx_payment_providers_api_key_hash
+            tableName: payment_providers
+            columns:
+              - column:
+                  name: api_key_hash
 
   - changeSet:
       id: 003-seed-dev-payment-providers

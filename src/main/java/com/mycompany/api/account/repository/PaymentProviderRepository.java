@@ -34,9 +34,11 @@ public interface PaymentProviderRepository extends JpaRepository<PaymentProvider
     Optional<PaymentProvider> findByCode(String code);
 
     /**
-     * Find all active providers.
+     * Find active provider by API key hash.
+     * Used for cache-aside authentication fallback when provider is not in cache.
      *
-     * @return list of active providers
+     * @param apiKeyHash SHA-256 hash of the raw API key
+     * @return optional containing provider if found and active
      */
-    List<PaymentProvider> findByActiveTrue();
+    Optional<PaymentProvider> findByApiKeyHashAndActiveTrue(String apiKeyHash);
 }

@@ -18,7 +18,7 @@ import com.mycompany.api.account.dto.UpdateCustomerRequest;
 import com.mycompany.api.account.exception.DuplicateResourceException;
 import com.mycompany.api.account.exception.ResourceNotFoundException;
 import com.mycompany.api.account.service.CustomerService;
-import com.mycompany.api.account.service.PaymentProviderService;
+import com.mycompany.api.account.service.ProviderService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -60,7 +60,7 @@ class CustomerControllerTest {
     private CustomerService customerService;
 
     @MockitoBean
-    private PaymentProviderService providerService;
+    private ProviderService providerService;
 
     private CustomerDetailedResponse sampleCustomerResponse;
     private CreateCustomerRequest sampleCreateRequest;
