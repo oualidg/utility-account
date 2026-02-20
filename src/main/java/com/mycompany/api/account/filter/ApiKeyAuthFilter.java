@@ -89,6 +89,8 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
 
     /**
      * Only apply this filter to provider-facing payment endpoints.
+     *
+     * TODO: Migrate to Spring Security in security phase.
      */
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {

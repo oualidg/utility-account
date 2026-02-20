@@ -53,9 +53,8 @@ public class PaymentProvider {
     @Column(name = "name", nullable = false, length = 100)
     private String name;
 
-    /**
-     * hash of the provider's API key.
-     * The raw key is never stored.
+    /** SHA-256 hash of the raw API key. SHA-256 is appropriate here because keys
+     *  are long random UUIDs (122 bits entropy) — brute force is computationally infeasible.
      */
     @Column(name = "api_key_hash", nullable = false, length = 255)
     private String apiKeyHash;

@@ -8,9 +8,6 @@
  *
  * Feel free to use or contribute. Contact: oualid.gharach@gmail.com
  */
-/*
- * Copyright (c) 2026 Oualid Gharach. All rights reserved.
- */
 package com.mycompany.api.account.util;
 
 import org.junit.jupiter.api.BeforeEach;

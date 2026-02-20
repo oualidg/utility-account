@@ -10,11 +10,7 @@
  */
 package com.mycompany.api.account.dto;
 
-import jakarta.validation.constraints.DecimalMax;
-import jakarta.validation.constraints.DecimalMin;
-import jakarta.validation.constraints.Digits;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.*;
 
 import java.math.BigDecimal;
 
@@ -32,6 +28,7 @@ public record DepositRequest(
         BigDecimal amount,
 
         @NotBlank(message = "Payment reference is required")
+        @Size(max = 64, message = "Payment reference must not exceed 64 characters")
         String paymentReference
 
 ) {}

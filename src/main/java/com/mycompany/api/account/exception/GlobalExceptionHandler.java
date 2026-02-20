@@ -90,9 +90,9 @@ public class GlobalExceptionHandler {
         Map<String, String> validationErrors = new HashMap<>();
 
         ex.getBindingResult().getAllErrors().forEach(error -> {
-            String fieldName = ((FieldError) error).getField();
-            String errorMessage = error.getDefaultMessage();
-            validationErrors.put(fieldName, errorMessage);
+            if (error instanceof FieldError fieldError) {
+                validationErrors.put(fieldError.getField(), fieldError.getDefaultMessage());
+            }
         });
 
         log.warn("Validation failed for {} {} | Errors: {}",
