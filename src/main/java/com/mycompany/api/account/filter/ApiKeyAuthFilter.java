@@ -34,7 +34,7 @@ import java.util.Optional;
  * Filter that authenticates external provider requests using API keys.
  *
  * <p>Intercepts requests to payment endpoints, extracts the API key from
- * the {@code X-API-Key} header, validates it against the provider cache,
+ * the {@code X-Api-Key} header, validates it against the provider cache,
  * and stores the authenticated provider as a request attribute.</p>
  *
  * <p>The authenticated provider can be retrieved in controllers via:
@@ -51,7 +51,7 @@ import java.util.Optional;
 @Order(Ordered.HIGHEST_PRECEDENCE + 1)
 public class ApiKeyAuthFilter extends OncePerRequestFilter {
 
-    public static final String API_KEY_HEADER = "X-API-Key";
+    public static final String API_KEY_HEADER = "X-Api-Key";
     public static final String PROVIDER_ATTRIBUTE = "authenticatedProvider";
 
     private final ProviderService providerService;

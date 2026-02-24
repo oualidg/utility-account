@@ -35,7 +35,7 @@ import org.springdoc.core.customizers.OpenApiCustomizer;
         name = "ApiKeyAuth",
         type = SecuritySchemeType.APIKEY,
         in = SecuritySchemeIn.HEADER,
-        paramName = "X-API-KEY"
+        paramName = "X-Api-Key"
 )
 public class OpenApiConfig {
 

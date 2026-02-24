@@ -31,7 +31,7 @@ import org.springframework.web.bind.annotation.*;
  * REST controller for payment operations.
  * Handles deposit transactions and payment confirmations.
  *
- * <p>All endpoints require API key authentication via the {@code X-API-Key} header.
+ * <p>All endpoints require API key authentication via the {@code X-Api-Key} header.
  * The authenticated provider is resolved by {@link ApiKeyAuthFilter} and stored
  * as a request attribute.</p>
  *
