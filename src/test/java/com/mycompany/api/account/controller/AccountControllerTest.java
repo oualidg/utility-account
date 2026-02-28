@@ -10,6 +10,7 @@
  */
 package com.mycompany.api.account.controller;
 
+import com.mycompany.api.account.BaseWebMvcTest;
 import com.mycompany.api.account.dto.AccountResponse;
 import com.mycompany.api.account.dto.AccountSummaryResponse;
 import com.mycompany.api.account.entity.Account;
@@ -22,7 +23,9 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mapstruct.factory.Mappers;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
@@ -46,7 +49,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @WebMvcTest(AccountController.class)
 @TestPropertySource(properties = "spring.main.banner-mode=off")
 @DisplayName("AccountController Unit Tests")
-class AccountControllerTest {
+@AutoConfigureMockMvc(addFilters = false)
+@WithMockUser(roles = "ADMIN")
+class AccountControllerTest extends BaseWebMvcTest {
 
     @Autowired
     private MockMvc mockMvc;

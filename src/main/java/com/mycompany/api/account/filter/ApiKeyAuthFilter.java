@@ -11,6 +11,7 @@
 package com.mycompany.api.account.filter;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.mycompany.api.account.config.SecurityConfig;
 import com.mycompany.api.account.dto.ErrorResponse;
 import com.mycompany.api.account.entity.PaymentProvider;
 import com.mycompany.api.account.service.ProviderService;
@@ -20,11 +21,8 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.core.Ordered;
-import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
-import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
@@ -40,15 +38,13 @@ import java.util.Optional;
  * <p>The authenticated provider can be retrieved in controllers via:
  * {@code request.getAttribute("authenticatedProvider")}</p>
  *
- * <p>Runs after {@link com.mycompany.api.account.filter.CorrelationIdFilter}
- * so that authentication failures still have correlation IDs in logs.</p>
+ * <p>Registered explicitly in {@link SecurityConfig} via
+ * {@code addFilterBefore} — not a Spring-managed component.</p>
  *
  * @author Oualid Gharach
  */
-@Component
 @Slf4j
 @RequiredArgsConstructor
-@Order(Ordered.HIGHEST_PRECEDENCE + 1)
 public class ApiKeyAuthFilter extends OncePerRequestFilter {
 
     public static final String API_KEY_HEADER = "X-Api-Key";
@@ -87,19 +83,11 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
         filterChain.doFilter(request, response);
     }
 
-    /**
-     * Only apply this filter to provider-facing payment endpoints.
-     *
-     * TODO: Migrate to Spring Security in security phase.
-     */
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
         String path = request.getRequestURI();
         String method = request.getMethod();
 
-        // POST /api/v1/accounts/{accountNumber}/payments
-        // POST /api/v1/customers/{customerId}/payments
-        // GET  /api/v1/payments/confirmation/{reference}
         boolean isDepositToAccount = "POST".equals(method) && path.matches(".*/api/v1/accounts/\\d+/payments");
         boolean isDepositToCustomer = "POST".equals(method) && path.matches(".*/api/v1/customers/\\d+/payments");
         boolean isConfirmation = "GET".equals(method) && path.matches(".*/api/v1/payments/confirmation/.+");
@@ -113,7 +101,6 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
     private void sendError(HttpServletResponse response, HttpServletRequest request,
                            HttpStatus status, String message) throws IOException {
         ErrorResponse errorResponse = ErrorResponse.of(status, message, request.getRequestURI());
-
         response.setStatus(status.value());
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         response.getWriter().write(objectMapper.writeValueAsString(errorResponse));

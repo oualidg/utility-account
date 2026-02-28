@@ -11,6 +11,7 @@
 package com.mycompany.api.account.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.mycompany.api.account.BaseWebMvcTest;
 import com.mycompany.api.account.dto.CreateProviderRequest;
 import com.mycompany.api.account.dto.ProviderCreatedResponse;
 import com.mycompany.api.account.dto.ProviderResponse;
@@ -22,8 +23,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.http.MediaType;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
@@ -41,14 +44,16 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 /**
  * Unit tests for ProviderController.
- * Uses @WebMvcTest to test only the web layer with mocked service.
+ * Tests HTTP layer — request/response, validation, and service exception mapping.
  *
  * @author Oualid Gharach
  */
 @WebMvcTest(ProviderController.class)
 @TestPropertySource(properties = "spring.main.banner-mode=off")
 @DisplayName("ProviderController Unit Tests")
-class ProviderControllerTest {
+@AutoConfigureMockMvc(addFilters = false)
+@WithMockUser(roles = "ADMIN")
+class ProviderControllerTest extends BaseWebMvcTest {
 
     @Autowired
     private MockMvc mockMvc;

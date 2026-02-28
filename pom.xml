@@ -105,6 +105,18 @@
             <version>5.3.7</version>
         </dependency>
 
+        <!-- Spring Security (Authentication, filter chains, SecurityContext) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security</artifactId>
+        </dependency>
+
+        <!-- Nimbus JOSE+JWT via Spring Security OAuth2 Jose (JWT encoding/decoding) -->
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-oauth2-jose</artifactId>
+        </dependency>
+
         <!-- Spring Boot Test (Testing framework) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -128,6 +140,13 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-testcontainers</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- Spring Security Test (WithMockUser for controller tests) -->
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-test</artifactId>
             <scope>test</scope>
         </dependency>
 

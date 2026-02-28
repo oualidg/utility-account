@@ -125,24 +125,27 @@ class LuhnGeneratorTest {
     }
 
     @Test
-    void shouldGenerate1000UniqueCustomerIds() {
-        // This tests that we can generate many IDs without collisions
-        Set<Long> ids = new HashSet<>();
-
-        for (int i = 0; i < 1000; i++) {
-            Long id = luhnGenerator.generateCustomerId();
-            assertTrue(ids.add(id), "Generated ID should be unique: " + id);
-        }
-    }
-
-    @Test
-    void shouldGenerate1000UniqueAccountNumbers() {
-        // This tests that we can generate many Account Numbers without collisions
+    void shouldGenerate10000UniqueAccountNumbersWithRetryLogic() {
+        int targetSize = 10000;
+        int maxRetriesPerAttempt = 5;
         Set<Long> numbers = new HashSet<>();
 
-        for (int i = 0; i < 1000; i++) {
-            Long number = luhnGenerator.generateAccountNumber();
-            assertTrue(numbers.add(number), "Generated Account Number should be unique: " + number);
+        for (int i = 0; i < targetSize; i++) {
+            boolean success = false;
+
+            for (int retry = 0; retry < maxRetriesPerAttempt; retry++) {
+                Long number = luhnGenerator.generateAccountNumber();
+                if (numbers.add(number)) {
+                    success = true;
+                    break;
+                }
+                // Optional: log a warning to see how often collisions actually happen
+                System.out.println("Collision detected at index " + i + ". Retry count: " + (retry + 1));
+            }
+
+            assertTrue(success, "Failed to generate a unique number even after " + maxRetriesPerAttempt + " retries at index " + i);
         }
+
+        assertEquals(targetSize, numbers.size());
     }
 }

@@ -23,6 +23,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * Unit tests for UuidGenerator utility.
  * Verifies UUID v7 generation and uniqueness.
  */
+@DisplayName("UuidGeneratorTest Unit Tests")
 class UuidGeneratorTest {
 
     private UuidGenerator uuidGenerator;

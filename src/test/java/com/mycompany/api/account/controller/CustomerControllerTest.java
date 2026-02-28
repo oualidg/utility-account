@@ -11,6 +11,7 @@
 package com.mycompany.api.account.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.mycompany.api.account.BaseWebMvcTest;
 import com.mycompany.api.account.dto.CreateCustomerRequest;
 import com.mycompany.api.account.dto.CustomerDetailedResponse;
 import com.mycompany.api.account.dto.CustomerSummaryResponse;
@@ -23,7 +24,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.http.MediaType;
@@ -41,14 +44,16 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 /**
  * Unit tests for CustomerController.
- * Uses @WebMvcTest to test only the web layer with mocked service.
+ * Tests HTTP layer — request/response, validation, and service exception mapping.
  *
  * @author Oualid Gharach
  */
 @WebMvcTest(CustomerController.class)
 @TestPropertySource(properties = "spring.main.banner-mode=off")
 @DisplayName("CustomerController Unit Tests")
-class CustomerControllerTest {
+@AutoConfigureMockMvc(addFilters = false)
+@WithMockUser(roles = "ADMIN")
+class CustomerControllerTest extends BaseWebMvcTest {
 
     @Autowired
     private MockMvc mockMvc;

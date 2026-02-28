@@ -25,6 +25,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
@@ -35,14 +36,12 @@ import java.util.List;
  * REST controller for payment provider management.
  * Handles onboarding, updates, deactivation, reactivation, and API key regeneration.
  *
- * TODO Phase 6D: Secure with JWT — ROLE_ADMIN for onboard/deactivate/reactivate/regenerate,
- *                ROLE_STAFF for read operations.
- *
  * @author Oualid Gharach
  */
 @RestController
 @RequestMapping("/api/v1/providers")
 @RequiredArgsConstructor
+@PreAuthorize("hasRole('ADMIN')")
 @Tag(name = "Providers", description = "Payment provider management")
 @Slf4j
 public class ProviderController {
