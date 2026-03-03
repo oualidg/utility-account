@@ -107,7 +107,9 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         String path = request.getRequestURI();
         String method = request.getMethod();
 
-        if (path.startsWith("/api/auth/")) return true;
+        if (path.equals("/api/auth/login")) return true;
+        if (path.equals("/api/auth/refresh")) return true;
+        if (path.equals("/api/auth/logout")) return true;
 
         // Payment endpoints are authenticated by ApiKeyAuthFilter, not JWT
         if ("POST".equals(method) && path.matches(".*/api/v1/accounts/\\d+/payments")) return true;

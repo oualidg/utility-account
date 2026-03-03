@@ -127,8 +127,8 @@ public class OpenApiConfig {
                 return;
             }
 
-            // Auth endpoints — public, no security requirement
-            if (path.startsWith("/api/auth/")) {
+            // Auth endpoints — public, no security requirement (except /me which requires auth)
+            if (path.startsWith("/api/auth/") && !path.equals("/api/auth/me")) {
                 return;
             }
 

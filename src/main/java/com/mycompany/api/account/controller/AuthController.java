@@ -27,6 +27,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.userdetails.UserDetails;
 
 import java.util.Arrays;
 import java.util.Optional;
@@ -151,6 +153,20 @@ public class AuthController {
             clearCookie(response, "refresh_token");
         }
         return ResponseEntity.ok().build();
+    }
+
+    /**
+     * Returns the currently authenticated user's info from the JWT token.
+     * Used by the Angular app to restore session state on page refresh.
+     */
+    @GetMapping("/me")
+    public ResponseEntity<LoginResponse> me(Authentication authentication) {
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+        UserDetails userDetails = (UserDetails) authentication.getPrincipal();
+
+        return ResponseEntity.ok(authService.getCurrentUser(userDetails.getUsername()));
     }
 
     // -------------------------------------------------------------------------

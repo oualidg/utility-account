@@ -93,4 +93,14 @@ public class AuthService {
                     return jwtService.issueAccessToken(user);
                 });
     }
+
+    /**
+     * Returns the current user's info by username.
+     * Used by the /me endpoint to restore session state on page refresh.
+     */
+    public LoginResponse getCurrentUser(String username) {
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new IllegalStateException("User not found: " + username));
+        return LoginResponse.withoutTokens(user.getUsername(), user.getFirstName(), user.getLastName(), user.getRole().name());
+    }
 }

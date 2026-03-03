@@ -32,6 +32,13 @@ public record LoginResponse(
         String refreshToken
 ) {
     /**
+     * Creates a LoginResponse without tokens — for /me endpoint and cookie mode responses.
+     */
+    public static LoginResponse withoutTokens(String username, String firstName, String lastName, String role) {
+        return new LoginResponse(username, firstName, lastName, role, null, null);
+    }
+
+    /**
      * Returns a copy of this response without tokens — for cookie mode
      * where tokens are delivered as HttpOnly cookies, not in the body.
      */
