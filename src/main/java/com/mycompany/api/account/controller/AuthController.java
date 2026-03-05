@@ -16,6 +16,7 @@ import com.mycompany.api.account.dto.LoginResponse;
 import com.mycompany.api.account.dto.RefreshResponse;
 import com.mycompany.api.account.filter.JwtAuthFilter;
 import com.mycompany.api.account.service.AuthService;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -54,6 +55,7 @@ import java.util.Optional;
 @RequestMapping("/api/auth")
 @Slf4j
 @RequiredArgsConstructor
+@Tag(name = "Authentication", description = "Login, token refresh, and logout")
 public class AuthController {
 
     private static final String AUTH_MODE_HEADER = "X-Auth-Mode";

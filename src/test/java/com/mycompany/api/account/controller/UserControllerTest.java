@@ -12,10 +12,7 @@ package com.mycompany.api.account.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.mycompany.api.account.BaseWebMvcTest;
-import com.mycompany.api.account.dto.ChangePasswordRequest;
-import com.mycompany.api.account.dto.CreateUserRequest;
-import com.mycompany.api.account.dto.UpdateUserRequest;
-import com.mycompany.api.account.dto.UserResponse;
+import com.mycompany.api.account.dto.*;
 import com.mycompany.api.account.enums.Role;
 import com.mycompany.api.account.exception.DuplicateResourceException;
 import com.mycompany.api.account.exception.ResourceNotFoundException;
@@ -88,7 +85,6 @@ class UserControllerTest extends BaseWebMvcTest {
                 "John",
                 "Doe",
                 "john.doe@utility.local",
-                "Password1@",
                 Role.ROLE_OPERATOR
         );
 
@@ -165,14 +161,14 @@ class UserControllerTest extends BaseWebMvcTest {
     @DisplayName("POST /api/v1/users - Should create user and return 201")
     void shouldCreateUserSuccessfully() throws Exception {
         when(userService.createUser(any(CreateUserRequest.class)))
-                .thenReturn(sampleUserResponse);
+                .thenReturn(new CreateUserResponse(sampleUserResponse, "TempPass1@"));
 
         mockMvc.perform(post("/api/v1/users")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(validCreateRequest)))
                 .andExpect(status().isCreated())
                 .andExpect(header().string("Location", containsString("/api/v1/users/1")))
-                .andExpect(jsonPath("$.username").value("operator1"));
+                .andExpect(jsonPath("$.user.username").value("operator1"));
 
         verify(userService, times(1)).createUser(any(CreateUserRequest.class));
     }
@@ -197,7 +193,6 @@ class UserControllerTest extends BaseWebMvcTest {
                 "John",
                 "Doe",
                 "john@utility.local",
-                "Password1@",
                 Role.ROLE_OPERATOR
         );
 
@@ -210,27 +205,6 @@ class UserControllerTest extends BaseWebMvcTest {
     }
 
     @Test
-    @DisplayName("POST /api/v1/users - Should return 400 for weak password")
-    void shouldReturn400ForWeakPassword() throws Exception {
-        CreateUserRequest weakPasswordRequest = new CreateUserRequest(
-                "operator1",
-                "John",
-                "Doe",
-                "john@utility.local",
-                "password", // no uppercase, no digit, no special char
-                Role.ROLE_OPERATOR
-        );
-
-        mockMvc.perform(post("/api/v1/users")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(weakPasswordRequest)))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.validationErrors.password").exists());
-
-        verify(userService, never()).createUser(any());
-    }
-
-    @Test
     @DisplayName("POST /api/v1/users - Should return 400 for invalid email")
     void shouldReturn400ForInvalidEmail() throws Exception {
         CreateUserRequest invalidEmail = new CreateUserRequest(
@@ -238,7 +212,6 @@ class UserControllerTest extends BaseWebMvcTest {
                 "John",
                 "Doe",
                 "not-an-email",
-                "Password1@",
                 Role.ROLE_OPERATOR
         );
 

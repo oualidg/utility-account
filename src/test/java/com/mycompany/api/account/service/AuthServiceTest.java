@@ -94,6 +94,7 @@ class AuthServiceTest {
         // Then
         assertThat(response.accessToken()).isEqualTo("access-token");
         assertThat(response.refreshToken()).isEqualTo("refresh-token");
+        assertThat(response.id()).isEqualTo(1L);
         assertThat(response.role()).isEqualTo("ROLE_ADMIN");
         assertThat(response.firstName()).isEqualTo("Admin");
         assertThat(response.lastName()).isEqualTo("User");

@@ -73,7 +73,7 @@ public class AuthService {
 
         log.info("Successful login for user: {} with role: {}", user.getUsername(), user.getRole());
 
-        return new LoginResponse(username, user.getFirstName(), user.getLastName(), user.getRole().name(), accessToken, refreshToken);
+        return new LoginResponse(user.getId(), username, user.getFirstName(), user.getLastName(), user.getRole().name(), accessToken, refreshToken);
 
     }
 
@@ -101,6 +101,6 @@ public class AuthService {
     public LoginResponse getCurrentUser(String username) {
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new IllegalStateException("User not found: " + username));
-        return LoginResponse.withoutTokens(user.getUsername(), user.getFirstName(), user.getLastName(), user.getRole().name());
+        return LoginResponse.withoutTokens(user.getId(), user.getUsername(), user.getFirstName(), user.getLastName(), user.getRole().name());
     }
 }

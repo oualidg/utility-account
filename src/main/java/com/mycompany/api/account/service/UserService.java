@@ -8,22 +8,9 @@
  *
  * Feel free to use or contribute. Contact: oualid.gharach@gmail.com
  */
-/*
- * Copyright (c) 2026 Oualid Gharach. All rights reserved.
- *
- * Aiming for production-grade standards through clean code and best practices
- * for educational and informational purposes.
- *
- * Created on: 2/25/2026 at 9:39 PM
- *
- * Feel free to use or contribute. Contact: oualid.gharach@gmail.com
- */
 package com.mycompany.api.account.service;
 
-import com.mycompany.api.account.dto.ChangePasswordRequest;
-import com.mycompany.api.account.dto.CreateUserRequest;
-import com.mycompany.api.account.dto.UpdateUserRequest;
-import com.mycompany.api.account.dto.UserResponse;
+import com.mycompany.api.account.dto.*;
 import com.mycompany.api.account.entity.User;
 import com.mycompany.api.account.exception.DuplicateResourceException;
 import com.mycompany.api.account.exception.ResourceNotFoundException;
@@ -85,7 +72,7 @@ public class UserService {
      * @throws DuplicateResourceException if username or email already exists
      */
     @Transactional
-    public UserResponse createUser(CreateUserRequest request) {
+    public CreateUserResponse createUser(CreateUserRequest request) {
         User user = userMapper.toEntity(request);
 
         if (userRepository.existsByUsername(user.getUsername())) {
@@ -95,13 +82,14 @@ public class UserService {
             throw new DuplicateResourceException("Email already exists: " + user.getEmail());
         }
 
-        user.setPasswordHash(passwordEncoder.encode(request.password()));
+        String temporaryPassword = generateTemporaryPassword();
+        user.setPasswordHash(passwordEncoder.encode(temporaryPassword));
         user.setEnabled(true);
 
         try {
             User saved = userRepository.save(user);
             log.info("Created user: {} with role: {}", saved.getUsername(), saved.getRole());
-            return userMapper.toResponse(saved);
+            return new CreateUserResponse(userMapper.toResponse(saved), temporaryPassword);
         } catch (DataIntegrityViolationException e) {
             throw new DuplicateResourceException("Username or email already exists");
         }

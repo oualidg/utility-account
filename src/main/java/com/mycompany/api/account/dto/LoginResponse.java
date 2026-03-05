@@ -24,6 +24,7 @@ import com.fasterxml.jackson.annotation.JsonInclude;
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record LoginResponse(
+        Long id,
         String username,
         String firstName,
         String lastName,
@@ -34,8 +35,8 @@ public record LoginResponse(
     /**
      * Creates a LoginResponse without tokens — for /me endpoint and cookie mode responses.
      */
-    public static LoginResponse withoutTokens(String username, String firstName, String lastName, String role) {
-        return new LoginResponse(username, firstName, lastName, role, null, null);
+    public static LoginResponse withoutTokens(Long id, String username, String firstName, String lastName, String role) {
+        return new LoginResponse(id, username, firstName, lastName, role, null, null);
     }
 
     /**
@@ -43,6 +44,6 @@ public record LoginResponse(
      * where tokens are delivered as HttpOnly cookies, not in the body.
      */
     public LoginResponse toCookieResponse() {
-        return new LoginResponse(username, firstName, lastName, role, null, null);
+        return new LoginResponse(id, username, firstName, lastName, role, null, null);
     }
 }

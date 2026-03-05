@@ -13,6 +13,7 @@ package com.mycompany.api.account.controller;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.mycompany.api.account.BaseIntegrationTest;
 import com.mycompany.api.account.dto.CreateUserRequest;
+import com.mycompany.api.account.dto.UpdateUserRequest;
 import com.mycompany.api.account.enums.Role;
 import com.mycompany.api.account.service.UserService;
 import org.junit.jupiter.api.BeforeAll;
@@ -28,43 +29,21 @@ import org.springframework.test.web.servlet.MockMvc;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/**
- * Security slice tests verifying {@code @PreAuthorize} role enforcement
- * using real JWT tokens acquired via {@code POST /api/auth/login}.
- *
- * <p>Unlike controller unit tests which disable filters, these tests run the
- * full security stack — login → token → protected endpoint — to prove that
- * role rules are actually enforced end-to-end.</p>
- *
- * <p><strong>Note on unauthenticated POST/PUT/DELETE requests:</strong>
- * These return 403 (not 401) because Spring Security's CSRF filter fires before
- * the authentication check. An unauthenticated request has no CSRF token, so it
- * is rejected with 403 Forbidden. The request is still correctly blocked —
- * the distinction is which filter rejects it first.</p>
- *
- * @author Oualid Gharach
- */
 @AutoConfigureMockMvc
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @DisplayName("Security Controller Tests")
-class SecurityControllerTest extends BaseIntegrationTest  {
+class SecurityControllerTest extends BaseIntegrationTest {
 
-    @Autowired
-    private MockMvc mockMvc;
-
-    @Autowired
-    private ObjectMapper objectMapper;
-
-    @Autowired
-    private UserService userService;
-
-    @Autowired
-    private JdbcTemplate jdbcTemplate;
+    @Autowired private MockMvc mockMvc;
+    @Autowired private ObjectMapper objectMapper;
+    @Autowired private UserService userService;
+    @Autowired private JdbcTemplate jdbcTemplate;
 
     private String adminToken;
     private String operatorToken;
     private Long adminId;
     private Long operatorId;
+    private String operatorTempPassword;
 
     @BeforeAll
     void setUp() throws Exception {
@@ -74,12 +53,14 @@ class SecurityControllerTest extends BaseIntegrationTest  {
                 .filter(u -> u.username().equals("admin"))
                 .findFirst().orElseThrow().id();
 
-        operatorId = userService.createUser(new CreateUserRequest(
-                "operator1", "Test", "Operator", "operator1@utility.local", "Password1@", Role.ROLE_OPERATOR
-        )).id();
+        var created = userService.createUser(new CreateUserRequest(
+                "operator1", "Test", "Operator", "operator1@utility.local", Role.ROLE_OPERATOR
+        ));
+        operatorId = created.user().id();
+        operatorTempPassword = created.temporaryPassword();
 
         adminToken = "Bearer " + login("admin", "admin");
-        operatorToken = "Bearer " + login("operator1", "Password1@");
+        operatorToken = "Bearer " + login("operator1", operatorTempPassword);
     }
 
     private String login(String username, String password) throws Exception {
@@ -160,6 +141,13 @@ class SecurityControllerTest extends BaseIntegrationTest  {
                 .andExpect(status().isForbidden());
     }
 
+    @Test
+    @DisplayName("GET /api/v1/reports/payments - Operator should get 200")
+    void operatorCanSearchPayments() throws Exception {
+        mockMvc.perform(get("/api/v1/reports/payments").header("Authorization", operatorToken))
+                .andExpect(status().isOk());
+    }
+
     // -------------------------------------------------------------------------
     // CustomerController — ADMIN and OPERATOR
     // -------------------------------------------------------------------------
@@ -230,7 +218,7 @@ class SecurityControllerTest extends BaseIntegrationTest  {
         mockMvc.perform(put("/api/v1/users/" + operatorId + "/password")
                         .header("Authorization", operatorToken)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"currentPassword\":\"Password1@\",\"newPassword\":\"NewPassword1@\"}"))
+                        .content("{\"currentPassword\":\"" + operatorTempPassword + "\",\"newPassword\":\"NewPassword1@\"}"))
                 .andExpect(status().isNoContent());
     }
 
@@ -240,7 +228,7 @@ class SecurityControllerTest extends BaseIntegrationTest  {
         mockMvc.perform(put("/api/v1/users/" + adminId + "/password")
                         .header("Authorization", operatorToken)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"currentPassword\":\"Password1@\",\"newPassword\":\"NewPassword1@\"}"))
+                        .content("{\"currentPassword\":\"" + operatorTempPassword + "\",\"newPassword\":\"NewPassword1@\"}"))
                 .andExpect(status().isForbidden());
     }
 
@@ -275,10 +263,7 @@ class SecurityControllerTest extends BaseIntegrationTest  {
     }
 
     // -------------------------------------------------------------------------
-    // UserController — unauthenticated blocked on all endpoints
-    // GET endpoints return 401. POST/PUT/DELETE return 403 because
-    // CSRF filter fires before auth check for requests without a Bearer token.
-    // The request is still correctly blocked in both cases.
+    // UserController — unauthenticated blocked
     // -------------------------------------------------------------------------
 
     @Test
@@ -293,7 +278,7 @@ class SecurityControllerTest extends BaseIntegrationTest  {
     void unauthenticatedCannotCreateUser() throws Exception {
         mockMvc.perform(post("/api/v1/users")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"username\":\"x\",\"firstName\":\"X\",\"lastName\":\"X\",\"email\":\"x@x.com\",\"password\":\"Password1@\",\"role\":\"ROLE_OPERATOR\"}"))
+                        .content("{\"username\":\"x\",\"firstName\":\"X\",\"lastName\":\"X\",\"email\":\"x@x.com\",\"role\":\"ROLE_OPERATOR\"}"))
                 .andExpect(status().isForbidden());
     }
 
@@ -391,6 +376,39 @@ class SecurityControllerTest extends BaseIntegrationTest  {
     @DisplayName("GET /api/v1/customers/search - Unauthenticated should get 401")
     void unauthenticatedCannotSearchCustomers() throws Exception {
         mockMvc.perform(get("/api/v1/customers/search").param("mobile", "082"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    // -------------------------------------------------------------------------
+    // AuthController — login edge cases
+    // -------------------------------------------------------------------------
+
+    @Test
+    @DisplayName("POST /api/auth/login - Disabled account should get 401")
+    void disabledAccountCannotLogin() throws Exception {
+        userService.updateUser(operatorId,
+                new UpdateUserRequest("Test", "Operator", "operator1@utility.local", Role.ROLE_OPERATOR, false),
+                "admin");
+
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("X-Auth-Mode", "bearer")
+                        .content("{\"username\":\"operator1\",\"password\":\"" + operatorTempPassword + "\"}"))
+                .andExpect(status().isUnauthorized());
+
+        // Re-enable to avoid polluting other tests that use operatorToken
+        userService.updateUser(operatorId,
+                new UpdateUserRequest("Test", "Operator", "operator1@utility.local", Role.ROLE_OPERATOR, true),
+                "admin");
+    }
+
+    @Test
+    @DisplayName("POST /api/auth/login - Wrong password should get 401")
+    void wrongPasswordReturns401() throws Exception {
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("X-Auth-Mode", "bearer")
+                        .content("{\"username\":\"admin\",\"password\":\"wrongpassword\"}"))
                 .andExpect(status().isUnauthorized());
     }
 }

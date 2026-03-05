@@ -8,24 +8,11 @@
  *
  * Feel free to use or contribute. Contact: oualid.gharach@gmail.com
  */
-/*
- * Copyright (c) 2026 Oualid Gharach. All rights reserved.
- *
- * Aiming for production-grade standards through clean code and best practices
- * for educational and informational purposes.
- *
- * Created on: 2/25/2026 at 10:24 PM
- *
- * Feel free to use or contribute. Contact: oualid.gharach@gmail.com
- */
 package com.mycompany.api.account.controller;
 
-import com.mycompany.api.account.dto.ChangePasswordRequest;
-import com.mycompany.api.account.dto.CreateUserRequest;
-import com.mycompany.api.account.dto.ResetPasswordResponse;
-import com.mycompany.api.account.dto.UpdateUserRequest;
-import com.mycompany.api.account.dto.UserResponse;
+import com.mycompany.api.account.dto.*;
 import com.mycompany.api.account.service.UserService;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -59,6 +46,7 @@ import java.util.List;
 @RequestMapping("/api/v1/users")
 @RequiredArgsConstructor
 @PreAuthorize("hasRole('ADMIN')")
+@Tag(name = "User", description = "User management APIs")
 @Slf4j
 public class UserController {
 
@@ -89,12 +77,12 @@ public class UserController {
      * Creates a new user. Returns 201 with Location header.
      */
     @PostMapping
-    public ResponseEntity<UserResponse> createUser(@Valid @RequestBody CreateUserRequest request) {
+    public ResponseEntity<CreateUserResponse> createUser(@Valid @RequestBody CreateUserRequest request) {
         log.info("REST request to create user: {}", request.username());
-        UserResponse created = userService.createUser(request);
+        CreateUserResponse created = userService.createUser(request);
         URI location = ServletUriComponentsBuilder.fromCurrentRequest()
                 .path("/{id}")
-                .buildAndExpand(created.id())
+                .buildAndExpand(created.user().id())
                 .toUri();
         return ResponseEntity.created(location).body(created);
     }

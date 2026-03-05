@@ -14,7 +14,6 @@ import com.mycompany.api.account.enums.Role;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
 /**
@@ -37,14 +36,6 @@ public record CreateUserRequest(
         @Email(message = "Email must be valid")
         @Size(max = 100, message = "Email must not exceed 100 characters")
         String email,
-
-        @NotBlank(message = "Password is required")
-        @Size(min = 8, message = "Password must be at least 8 characters")
-        @Pattern(
-                regexp = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[@$!%*?&])[A-Za-z\\d@$!%*?&]{8,}$",
-                message = "Password must contain at least one uppercase letter, one lowercase letter, one digit, and one special character"
-        )
-        String password,
 
         @NotNull(message = "Role is required")
         Role role

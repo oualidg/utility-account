@@ -30,6 +30,13 @@ import java.util.List;
  * REST controller for payment reporting endpoints.
  * All endpoints are read-only — no state is modified.
  *
+ * <p>Access rules:
+ * <ul>
+ *   <li>Default — ADMIN only (class-level)</li>
+ *   <li>{@code GET /payments} — overridden to allow ADMIN and OPERATOR,
+ *       as operators need this to view account payment history</li>
+ * </ul>
+ *
  * @author Oualid Gharach
  */
 @Slf4j
@@ -44,9 +51,11 @@ public class ReportingController {
 
     /**
      * Search payments with optional filters.
+     * Overrides the class-level ADMIN restriction — operators need this to view account payment history.
      * All parameters are optional — omit any to broaden the search.
      */
     @GetMapping("/payments")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OPERATOR')")
     @Operation(summary = "Search payments", description = "Search payments by account, customer, provider, or date range")
     public ResponseEntity<List<PaymentResponse>> searchPayments(
             @RequestParam(required = false)
