@@ -22,13 +22,14 @@ import com.mycompany.api.account.repository.CustomerRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.retry.annotation.Backoff;
 import org.springframework.retry.annotation.Retryable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
-import java.util.List;
 
 /**
  * Service layer for Customer operations.
@@ -83,45 +84,61 @@ public class CustomerService {
         return customerRepository.findByIdWithAccounts(customerId)
                 .map(customerMapper::toDetailedResponse)
                 .orElseThrow(() -> new ResourceNotFoundException("Customer not found with ID: " + customerId));
-
     }
 
     /**
-     * Get all customers.
+     * Get a paginated list of all active customers.
      *
-     * @return list of all customers
+     * @param pageable pagination and sort parameters (page, size, sort)
+     * @return page of customer summary responses
      */
     @Transactional(readOnly = true)
-    public List<CustomerSummaryResponse> getAllCustomers() {
-        log.info("Fetching all customers");
+    public Page<CustomerSummaryResponse> getAllCustomers(Pageable pageable) {
+        log.info("Fetching customers - page: {}, size: {}", pageable.getPageNumber(), pageable.getPageSize());
 
-        return customerRepository.findAll().stream()
-                .map(customerMapper::toSummaryResponse)
-                .toList();
+        return customerRepository.findAll(pageable)
+                .map(customerMapper::toSummaryResponse);
     }
 
     /**
-     * Search customers by mobile number containing the given string.
+     * Search customers by mobile number fragment.
+     * Returns customers whose mobile number contains the given string.
      *
-     * @param mobileNumber the mobile number string to search for
-     * @return list of matching customers
+     * @param mobileNumber the mobile number fragment to search for
+     * @param pageable     pagination and sort parameters
+     * @return page of matching customer summary responses
      */
     @Transactional(readOnly = true)
-    public List<CustomerSummaryResponse> searchByMobileNumber(String mobileNumber) {
+    public Page<CustomerSummaryResponse> searchByMobileNumber(String mobileNumber, Pageable pageable) {
         log.info("Searching customers by mobile number containing: {}", mobileNumber);
 
-        return customerRepository.findByMobileNumberContaining(mobileNumber).stream()
-                .map(customerMapper::toSummaryResponse)
-                .toList();
+        return customerRepository.findByMobileNumberContaining(mobileNumber, pageable)
+                .map(customerMapper::toSummaryResponse);
+    }
+
+    /**
+     * Search customers by surname fragment (case-insensitive).
+     * Returns customers whose last name contains the given string.
+     *
+     * @param surname  the surname fragment to search for
+     * @param pageable pagination and sort parameters
+     * @return page of matching customer summary responses
+     */
+    @Transactional(readOnly = true)
+    public Page<CustomerSummaryResponse> searchBySurname(String surname, Pageable pageable) {
+        log.info("Searching customers by surname containing: {}", surname);
+
+        return customerRepository.findByLastNameContainingIgnoreCase(surname, pageable)
+                .map(customerMapper::toSummaryResponse);
     }
 
     /**
      * Update an existing customer.
      *
      * @param customerId the customer ID
-     * @param request the update request
+     * @param request    the update request
      * @return the updated customer response with accounts
-     * @throws ResourceNotFoundException if customer not found
+     * @throws ResourceNotFoundException  if customer not found
      * @throws DuplicateResourceException if new email already exists
      */
     @Transactional
@@ -129,11 +146,9 @@ public class CustomerService {
         log.info("Updating customer with ID: {}", customerId);
         log.debug("Update request: {}", request);
 
-        // Find existing customer
         Customer customer = customerRepository.findByIdWithAccounts(customerId)
                 .orElseThrow(() -> new ResourceNotFoundException("Customer not found with ID: " + customerId));
 
-        // Check if email is being changed and if new email already exists
         if (request.email() != null) {
             String normalizedNewEmail = customerMapper.normalizeEmail(request.email());
             if (!normalizedNewEmail.equals(customer.getEmail())) {
@@ -143,7 +158,6 @@ public class CustomerService {
             }
         }
 
-        // Update entity using MapStruct (only non-null fields, with normalization)
         customerMapper.updateEntity(request, customer);
 
         // Manually set updatedAt — @PreUpdate may not fire if Hibernate detects no
@@ -151,7 +165,6 @@ public class CustomerService {
         // is to updatedAt itself. Explicit assignment guarantees the timestamp updates.
         customer.setUpdatedAt(Instant.now());
 
-        // Save updated customer
         Customer updatedCustomer = customerRepository.save(customer);
 
         log.info("Customer updated successfully with ID: {}", customerId);

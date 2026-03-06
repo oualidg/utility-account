@@ -60,17 +60,28 @@ public interface PaymentRepository extends JpaRepository<Payment, String> {
      * Null parameters are ignored — only provided filters are applied.
      * Results ordered by paymentDate descending (most recent first).
      *
-     * @param accountNumber optional account number filter
-     * @param customerId    optional customer ID filter
-     * @param providerCode  optional provider code filter
-     * @param from          optional start of date range (inclusive)
-     * @param to            optional end of date range (inclusive)
+     * <p><strong>Receipt number search — prefix match only:</strong>
+     * The {@code receiptNumber} parameter uses a prefix LIKE pattern ({@code fragment%})
+     * rather than a contains pattern ({@code %fragment%}). This is intentional.
+     * A leading wildcard would prevent PostgreSQL from using the primary key B-tree
+     * index on {@code receipt_number}, forcing a full table scan at high volumes.
+     * Prefix match preserves index usage and keeps receipt searches sub-millisecond.
+     * Do NOT add a leading {@code %}. Operators naturally search from the start of a receipt number.</p>
+     *
+     * @param accountNumber  optional account number filter (exact match)
+     * @param customerId     optional customer ID filter (exact match)
+     * @param providerCode   optional provider code filter (exact match)
+     * @param receiptNumber  optional receipt number prefix filter (case-insensitive, prefix match)
+     * @param from           optional start of date range (inclusive)
+     * @param to             optional end of date range (inclusive)
      * @return list of matching payments
      */
     default List<Payment> searchPayments(Long accountNumber, Long customerId,
-                                         String providerCode, Instant from, Instant to) {
+                                         String providerCode, String receiptNumber,
+                                         Instant from, Instant to) {
         return searchPaymentsQuery(
                 accountNumber, customerId, providerCode,
+                receiptNumber != null ? receiptNumber.toLowerCase() + "%" : null,
                 from != null ? from : Instant.EPOCH,
                 to   != null ? to   : FAR_FUTURE
         );
@@ -83,6 +94,7 @@ public interface PaymentRepository extends JpaRepository<Payment, String> {
             "WHERE (:accountNumber IS NULL OR a.accountNumber = :accountNumber) " +
             "AND (:customerId   IS NULL OR c.customerId   = :customerId) " +
             "AND (:providerCode IS NULL OR pp.code        = :providerCode) " +
+            "AND (:receiptNumber IS NULL OR LOWER(p.receiptNumber) LIKE :receiptNumber) " +
             "AND p.paymentDate >= :from " +
             "AND p.paymentDate <= :to " +
             "ORDER BY p.paymentDate DESC")
@@ -90,6 +102,7 @@ public interface PaymentRepository extends JpaRepository<Payment, String> {
             @Param("accountNumber") Long accountNumber,
             @Param("customerId")    Long customerId,
             @Param("providerCode")  String providerCode,
+            @Param("receiptNumber") String receiptNumber,
             @Param("from")          Instant from,
             @Param("to")            Instant to
     );
@@ -177,8 +190,37 @@ public interface PaymentRepository extends JpaRepository<Payment, String> {
     List<Object[]> getAccountTotalsByProviderQuery(@Param("accountNumber") Long accountNumber);
 
     /**
+     * Total payment amount and count for a single provider within a date range.
+     * Used by the provider detail page Load button via {@code getProviderSummary}.
+     * Null dates default to all-time range.
+     *
+     * @param providerCode provider code to filter by
+     * @param from         optional start of date range (inclusive)
+     * @param to           optional end of date range (inclusive)
+     * @return Object[]{BigDecimal totalAmount, Long count}
+     */
+    default Object[] getProviderTotals(String providerCode, Instant from, Instant to) {
+        return getProviderTotalsQuery(
+                providerCode,
+                from != null ? from : Instant.EPOCH,
+                to   != null ? to   : FAR_FUTURE
+        );
+    }
+
+    @Query("SELECT SUM(p.amount), COUNT(p) FROM Payment p " +
+            "JOIN p.paymentProvider pp " +
+            "WHERE pp.code = :providerCode " +
+            "AND p.paymentDate >= :from " +
+            "AND p.paymentDate <= :to")
+    Object[] getProviderTotalsQuery(
+            @Param("providerCode") String providerCode,
+            @Param("from")         Instant from,
+            @Param("to")           Instant to
+    );
+
+    /**
      * All payments for a provider within a date range, with account details.
-     * Used to build the settlement report.
+     * Used to build the settlement report for CSV export.
      * Null dates default to all-time range.
      *
      * @param providerCode provider code to filter by

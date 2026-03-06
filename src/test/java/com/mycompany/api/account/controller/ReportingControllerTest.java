@@ -15,6 +15,7 @@ import com.mycompany.api.account.dto.PaymentResponse;
 import com.mycompany.api.account.dto.PaymentSummaryResponse;
 import com.mycompany.api.account.dto.ProviderBreakdownResponse;
 import com.mycompany.api.account.dto.ProviderReconciliationResponse;
+import com.mycompany.api.account.dto.ProviderSummaryResponse;
 import com.mycompany.api.account.exception.ResourceNotFoundException;
 import com.mycompany.api.account.service.PaymentQueryService;
 import com.mycompany.api.account.service.ProviderService;
@@ -33,15 +34,15 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 
+import static org.hamcrest.Matchers.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
-import static org.hamcrest.Matchers.*;
 
 /**
- * Unit tests for ReportingControllerTest.
+ * Unit tests for ReportingController.
  * Tests HTTP layer — request/response, validation, and service exception mapping.
  *
  * @author Oualid Gharach
@@ -84,7 +85,7 @@ class ReportingControllerTest extends BaseWebMvcTest {
     @Test
     @DisplayName("Should return payments for valid search filters")
     void shouldReturnPaymentsForValidFilters() throws Exception {
-        when(paymentQueryService.searchPayments(any(), any(), any(), any(), any()))
+        when(paymentQueryService.searchPayments(any(), any(), any(), any(), any(), any()))
                 .thenReturn(List.of(samplePayment));
 
         mockMvc.perform(get("/api/v1/reports/payments")
@@ -99,12 +100,26 @@ class ReportingControllerTest extends BaseWebMvcTest {
     @Test
     @DisplayName("Should return empty list when no payments match")
     void shouldReturnEmptyListWhenNoPaymentsMatch() throws Exception {
-        when(paymentQueryService.searchPayments(any(), any(), any(), any(), any()))
+        when(paymentQueryService.searchPayments(any(), any(), any(), any(), any(), any()))
                 .thenReturn(List.of());
 
         mockMvc.perform(get("/api/v1/reports/payments"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$", hasSize(0)));
+    }
+
+
+    @Test
+    @DisplayName("Should return payments filtered by receipt prefix")
+    void shouldReturnPaymentsFilteredByReceiptPrefix() throws Exception {
+        when(paymentQueryService.searchPayments(any(), any(), any(), eq("receipt-uuid"), any(), any()))
+                .thenReturn(List.of(samplePayment));
+
+        mockMvc.perform(get("/api/v1/reports/payments")
+                        .param("receiptNumber", "receipt-uuid"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(1)))
+                .andExpect(jsonPath("$[0].receiptNumber", is("receipt-uuid-001")));
     }
 
     @Test
@@ -171,12 +186,66 @@ class ReportingControllerTest extends BaseWebMvcTest {
     }
 
     @Test
-    @DisplayName("Should return 400 when account number fails Luhn validation")
+    @DisplayName("Should return 400 when account number fails Luhn validation on account summary")
     void shouldReturn400OnAccountSummaryWithInvalidLuhn() throws Exception {
         mockMvc.perform(get("/api/v1/reports/accounts/1234567891/summary"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message",
                         is("Account number must be a valid 10-digit number with checksum")));
+    }
+
+    // -------------------------------------------------------------------------
+    // GET /api/v1/reports/providers/{providerCode}/summary
+    // -------------------------------------------------------------------------
+
+    @Test
+    @DisplayName("Should return provider summary with totals only")
+    void shouldReturnProviderSummaryWithTotalsOnly() throws Exception {
+        ProviderSummaryResponse summary = new ProviderSummaryResponse(
+                "MPESA",
+                "M-Pesa",
+                new BigDecimal("2400000.00"),
+                48392L
+        );
+
+        when(paymentQueryService.getProviderSummary(eq("MPESA"), any(), any()))
+                .thenReturn(summary);
+
+        mockMvc.perform(get("/api/v1/reports/providers/MPESA/summary")
+                        .param("from", "2026-03-01T00:00:00Z")
+                        .param("to", "2026-03-31T23:59:59Z"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.providerCode", is("MPESA")))
+                .andExpect(jsonPath("$.providerName", is("M-Pesa")))
+                .andExpect(jsonPath("$.totalAmount", is(2400000.00)))
+                .andExpect(jsonPath("$.totalCount", is(48392)));
+    }
+
+    @Test
+    @DisplayName("Should return provider summary with zero totals when no payments exist")
+    void shouldReturnProviderSummaryWithZeroTotalsWhenNoPayments() throws Exception {
+        ProviderSummaryResponse emptySummary = new ProviderSummaryResponse(
+                "MTN", "MTN Mobile Money", BigDecimal.ZERO, 0L
+        );
+
+        when(paymentQueryService.getProviderSummary(eq("MTN"), any(), any()))
+                .thenReturn(emptySummary);
+
+        mockMvc.perform(get("/api/v1/reports/providers/MTN/summary"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalAmount", is(0)))
+                .andExpect(jsonPath("$.totalCount", is(0)));
+    }
+
+    @Test
+    @DisplayName("Should return 404 when provider not found on summary")
+    void shouldReturn404WhenProviderNotFoundOnSummary() throws Exception {
+        when(paymentQueryService.getProviderSummary(eq("UNKNOWN"), any(), any()))
+                .thenThrow(new ResourceNotFoundException("Provider not found: UNKNOWN"));
+
+        mockMvc.perform(get("/api/v1/reports/providers/UNKNOWN/summary"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.message", is("Provider not found: UNKNOWN")));
     }
 
     // -------------------------------------------------------------------------
@@ -203,8 +272,8 @@ class ReportingControllerTest extends BaseWebMvcTest {
     }
 
     @Test
-    @DisplayName("Should return 404 when provider not found")
-    void shouldReturn404WhenProviderNotFound() throws Exception {
+    @DisplayName("Should return 404 when provider not found on reconciliation")
+    void shouldReturn404WhenProviderNotFoundOnReconciliation() throws Exception {
         when(paymentQueryService.getReconciliation(eq("UNKNOWN"), any(), any()))
                 .thenThrow(new ResourceNotFoundException("Provider not found: UNKNOWN"));
 

@@ -16,6 +16,7 @@ import com.mycompany.api.account.exception.DuplicateResourceException;
 import com.mycompany.api.account.exception.ResourceNotFoundException;
 import com.mycompany.api.account.mapper.UserMapper;
 import com.mycompany.api.account.repository.UserRepository;
+import com.mycompany.api.account.util.PasswordGenerator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -25,7 +26,6 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.security.SecureRandom;
 import java.util.List;
 
 /**
@@ -45,10 +45,6 @@ import java.util.List;
 @RequiredArgsConstructor
 @Slf4j
 public class UserService {
-
-    private static final String TEMP_PASSWORD_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789@#$!";
-    private static final int TEMP_PASSWORD_LENGTH = 12;
-    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
@@ -82,7 +78,7 @@ public class UserService {
             throw new DuplicateResourceException("Email already exists: " + user.getEmail());
         }
 
-        String temporaryPassword = generateTemporaryPassword();
+        String temporaryPassword = PasswordGenerator.generate(); // [CHANGED] extracted to util
         user.setPasswordHash(passwordEncoder.encode(temporaryPassword));
         user.setEnabled(true);
 
@@ -179,7 +175,7 @@ public class UserService {
     @Transactional
     public String resetPassword(Long id) {
         User user = findById(id);
-        String temporaryPassword = generateTemporaryPassword();
+        String temporaryPassword = PasswordGenerator.generate();
         user.setPasswordHash(passwordEncoder.encode(temporaryPassword));
         userRepository.save(user);
         log.info("Password reset for user: {}", user.getUsername());
@@ -193,13 +189,5 @@ public class UserService {
     private User findById(Long id) {
         return userRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with ID: " + id));
-    }
-
-    private String generateTemporaryPassword() {
-        StringBuilder password = new StringBuilder(TEMP_PASSWORD_LENGTH);
-        for (int i = 0; i < TEMP_PASSWORD_LENGTH; i++) {
-            password.append(TEMP_PASSWORD_CHARS.charAt(SECURE_RANDOM.nextInt(TEMP_PASSWORD_CHARS.length())));
-        }
-        return password.toString();
     }
 }

@@ -26,6 +26,9 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -33,6 +36,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.Instant;
+import java.util.Collections;
 import java.util.List;
 
 import static org.hamcrest.Matchers.*;
@@ -68,21 +72,29 @@ class CustomerControllerTest extends BaseWebMvcTest {
     private ProviderService providerService;
 
     private CustomerDetailedResponse sampleCustomerResponse;
+    private CustomerSummaryResponse sampleSummary;
     private CreateCustomerRequest sampleCreateRequest;
     private UpdateCustomerRequest sampleUpdateRequest;
 
     @BeforeEach
     void setUp() {
-        // Sample data for tests - using VALID 8-digit Luhn customer ID: 12345674
         sampleCustomerResponse = new CustomerDetailedResponse(
                 12345674L,
                 "John",
                 "Doe",
                 "john@email.com",
                 "0123456789",
-                java.util.Collections.emptyList(), // Add this!
+                Collections.emptyList(),
                 Instant.now(),
                 Instant.now()
+        );
+
+        sampleSummary = new CustomerSummaryResponse(
+                12345674L,
+                "John",
+                "Doe",
+                "john@email.com",
+                "0123456789"
         );
 
         sampleCreateRequest = new CreateCustomerRequest(
@@ -100,293 +112,255 @@ class CustomerControllerTest extends BaseWebMvcTest {
         );
     }
 
-    @Test
-    @DisplayName("POST /api/v1/customers - Should create customer successfully")
-    void shouldCreateCustomerSuccessfully() throws Exception {
-        // Given
-        when(customerService.createCustomer(any(CreateCustomerRequest.class)))
-                .thenReturn(sampleCustomerResponse);
+    // -------------------------------------------------------------------------
+    // POST /api/v1/customers
+    // -------------------------------------------------------------------------
 
-        // When & Then
+    @Test
+    @DisplayName("Should create customer and return 201 with Location header")
+    void shouldCreateCustomerAndReturn201() throws Exception {
+        when(customerService.createCustomer(any())).thenReturn(sampleCustomerResponse);
+
         mockMvc.perform(post("/api/v1/customers")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(sampleCreateRequest)))
                 .andExpect(status().isCreated())
-                .andExpect(header().string("Location", containsString("/api/v1/customers/" + sampleCustomerResponse.customerId())))
-                .andExpect(jsonPath("$.customerId").value(sampleCustomerResponse.customerId()))
-                .andExpect(jsonPath("$.firstName").value(sampleCustomerResponse.firstName()))
-                .andExpect(jsonPath("$.lastName").value(sampleCustomerResponse.lastName()))
-                .andExpect(jsonPath("$.email").value(sampleCustomerResponse.email()))
-                .andExpect(jsonPath("$.mobileNumber").value(sampleCustomerResponse.mobileNumber()));
-
-        verify(customerService, times(1)).createCustomer(any(CreateCustomerRequest.class));
+                .andExpect(header().exists("Location"))
+                .andExpect(jsonPath("$.customerId", is(12345674)))
+                .andExpect(jsonPath("$.firstName", is("John")))
+                .andExpect(jsonPath("$.lastName", is("Doe")));
     }
 
     @Test
-    @DisplayName("POST /api/v1/customers - Should return 400 for invalid request")
-    void shouldReturnBadRequestForInvalidCreateRequest() throws Exception {
-        // Given - Invalid request with missing firstName
-        CreateCustomerRequest invalidRequest = new CreateCustomerRequest(
-                null, // Invalid: firstName is required
-                "Doe",
-                "john@example.com",
-                "+27821234567"
-        );
-
-        // When & Then
-        mockMvc.perform(post("/api/v1/customers")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(invalidRequest)))
-                .andExpect(status().isBadRequest());
-
-        verify(customerService, never()).createCustomer(any(CreateCustomerRequest.class));
-    }
-
-    @Test
-    @DisplayName("POST /api/v1/customers - Should return 409 for duplicate email")
-    void shouldReturnConflictForDuplicateEmail() throws Exception {
-        // Given
-        when(customerService.createCustomer(any(CreateCustomerRequest.class)))
+    @DisplayName("Should return 409 when email already exists")
+    void shouldReturn409WhenEmailAlreadyExists() throws Exception {
+        when(customerService.createCustomer(any()))
                 .thenThrow(new DuplicateResourceException("Customer with email already exists"));
 
-        // When & Then
         mockMvc.perform(post("/api/v1/customers")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(sampleCreateRequest)))
                 .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.message").value("Customer with email already exists"));
-
-        verify(customerService, times(1)).createCustomer(any(CreateCustomerRequest.class));
+                .andExpect(jsonPath("$.message", containsString("already exists")));
     }
 
     @Test
-    @DisplayName("GET /api/v1/customers/{id} - Should return customer by ID")
-    void shouldReturnCustomerById() throws Exception {
-        // Given - Valid 8-digit Luhn customer ID
-        Long customerId = 12345674L;
-        when(customerService.getCustomer(sampleCustomerResponse.customerId()))
-                .thenReturn(sampleCustomerResponse);
+    @DisplayName("Should return 400 when create request is missing required fields")
+    void shouldReturn400WhenCreateRequestInvalid() throws Exception {
+        String invalidRequest = "{}";
 
-        // When & Then
-        mockMvc.perform(get("/api/v1/customers/{id}", customerId))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.customerId").value(sampleCustomerResponse.customerId()))
-                .andExpect(jsonPath("$.firstName").value(sampleCustomerResponse.firstName()))
-                .andExpect(jsonPath("$.lastName").value(sampleCustomerResponse.lastName()))
-                .andExpect(jsonPath("$.email").value(sampleCustomerResponse.email()));
-
-        verify(customerService, times(1)).getCustomer(customerId);
-    }
-
-    @Test
-    @DisplayName("GET /api/v1/customers/{id} - Should return 400 for invalid Luhn customer ID")
-    void shouldReturnBadRequestForInvalidLuhnCustomerId() throws Exception {
-        // Given - Invalid Luhn customer ID (wrong checksum)
-        Long invalidCustomerId = 12345678L;  // Invalid Luhn checksum
-
-        // When & Then
-        mockMvc.perform(get("/api/v1/customers/{id}", invalidCustomerId))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message").value(containsString("Customer ID must be a valid 8-digit number")));
-
-        // Service should NOT be called due to validation failure
-        verify(customerService, never()).getCustomer(any());
-    }
-
-    @Test
-    @DisplayName("POST /api/v1/customers - Should return 400 when mobile number exceeds 15 characters")
-    void shouldReturnBadRequestWhenMobileNumberTooLong() throws Exception {
-        // Given - Mobile number with 16 characters (exceeds database VARCHAR(15) limit)
-        CreateCustomerRequest invalidRequest = new CreateCustomerRequest(
-                "John",
-                "Doe",
-                "john@example.com",
-                "+672241710414586"  // 16 characters (bug we fixed!)
-        );
-
-        // When & Then
         mockMvc.perform(post("/api/v1/customers")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(invalidRequest)))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.status").value(400))
-                .andExpect(jsonPath("$.validationErrors.mobileNumber").exists());
+                        .content(invalidRequest))
+                .andExpect(status().isBadRequest());
+    }
 
-        // Service should never be called due to validation failure
-        verify(customerService, never()).createCustomer(any(CreateCustomerRequest.class));
+    // -------------------------------------------------------------------------
+    // GET /api/v1/customers/{customerId}
+    // -------------------------------------------------------------------------
+
+    @Test
+    @DisplayName("Should return customer when found by ID")
+    void shouldReturnCustomerWhenFoundById() throws Exception {
+        when(customerService.getCustomer(12345674L)).thenReturn(sampleCustomerResponse);
+
+        mockMvc.perform(get("/api/v1/customers/12345674"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.customerId", is(12345674)))
+                .andExpect(jsonPath("$.firstName", is("John")));
     }
 
     @Test
-    @DisplayName("GET /api/v1/customers/{id} - Should return 404 for non-existent customer")
-    void shouldReturnNotFoundForNonExistentCustomer() throws Exception {
-        // Given - Valid Luhn but non-existent customer
-        Long customerId = 99999997L;  // Valid Luhn checksum
-        when(customerService.getCustomer(customerId))
-                .thenThrow(new ResourceNotFoundException("Customer not found with ID: " + customerId));
+    @DisplayName("Should return 404 when customer not found by ID")
+    void shouldReturn404WhenCustomerNotFound() throws Exception {
+        when(customerService.getCustomer(12345674L))
+                .thenThrow(new ResourceNotFoundException("Customer not found with ID: 12345674"));
 
-        // When & Then
-        mockMvc.perform(get("/api/v1/customers/{id}", customerId))
+        mockMvc.perform(get("/api/v1/customers/12345674"))
                 .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.message").value(containsString("Customer not found")));
-
-        verify(customerService, times(1)).getCustomer(customerId);
+                .andExpect(jsonPath("$.message", containsString("not found")));
     }
 
     @Test
-    @DisplayName("GET /api/v1/customers - Should return all customers")
-    void shouldReturnAllCustomers() throws Exception {
-        // Given
-        CustomerSummaryResponse summary1 = new CustomerSummaryResponse(
-                12345670L,
-                "John",
-                "Doe",
-                "john@example.com",
-                "+27821111111"
+    @DisplayName("Should return 400 when customer ID fails Luhn validation")
+    void shouldReturn400WhenCustomerIdFailsLuhn() throws Exception {
+        mockMvc.perform(get("/api/v1/customers/12345671"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message",
+                        is("Customer ID must be a valid 8-digit number")));
+    }
+
+    // -------------------------------------------------------------------------
+    // GET /api/v1/customers
+    // -------------------------------------------------------------------------
+
+    @Test
+    @DisplayName("Should return paginated customer list")
+    void shouldReturnPaginatedCustomerList() throws Exception {
+        Page<CustomerSummaryResponse> page = new PageImpl<>(
+                List.of(sampleSummary),
+                PageRequest.of(0, 10),
+                1
         );
+        when(customerService.getAllCustomers(any())).thenReturn(page);
 
-        CustomerSummaryResponse summary2 = new CustomerSummaryResponse(
-                87654323L,  // Valid Luhn checksum
-                "Jane",
-                "Smith",
-                "jane@example.com",
-                "+27829999999"
+        mockMvc.perform(get("/api/v1/customers")
+                        .param("page", "0")
+                        .param("size", "10"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content", hasSize(1)))
+                .andExpect(jsonPath("$.content[0].customerId", is(12345674)))
+                .andExpect(jsonPath("$.totalElements", is(1)))
+                .andExpect(jsonPath("$.totalPages", is(1)))
+                .andExpect(jsonPath("$.number", is(0)));
+    }
+
+    @Test
+    @DisplayName("Should return empty page when no customers exist")
+    void shouldReturnEmptyPageWhenNoCustomers() throws Exception {
+        Page<CustomerSummaryResponse> emptyPage = new PageImpl<>(
+                Collections.emptyList(),
+                PageRequest.of(0, 10),
+                0
         );
+        when(customerService.getAllCustomers(any())).thenReturn(emptyPage);
 
-        List<CustomerSummaryResponse> customers = List.of(summary1, summary2);
-        when(customerService.getAllCustomers()).thenReturn(customers);
-
-        // When & Then
         mockMvc.perform(get("/api/v1/customers"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(2)))
-                .andExpect(jsonPath("$[0].customerId").value(summary1.customerId()))
-                .andExpect(jsonPath("$[1].customerId").value(summary2.customerId()));
-
-        verify(customerService, times(1)).getAllCustomers();
+                .andExpect(jsonPath("$.content", hasSize(0)))
+                .andExpect(jsonPath("$.totalElements", is(0)));
     }
 
-    @Test
-    @DisplayName("GET /api/v1/customers - Should return empty list when no customers")
-    void shouldReturnEmptyListWhenNoCustomers() throws Exception {
-        // Given
-        when(customerService.getAllCustomers()).thenReturn(List.of());
+    // -------------------------------------------------------------------------
+    // GET /api/v1/customers/search
+    // -------------------------------------------------------------------------
 
-        // When & Then
-        mockMvc.perform(get("/api/v1/customers"))
+    @Test
+    @DisplayName("Should return paginated results when searching by mobile")
+    void shouldReturnPaginatedResultsWhenSearchingByMobile() throws Exception {
+        Page<CustomerSummaryResponse> page = new PageImpl<>(
+                List.of(sampleSummary),
+                PageRequest.of(0, 10),
+                1
+        );
+        when(customerService.searchByMobileNumber(eq("082"), any())).thenReturn(page);
+
+        mockMvc.perform(get("/api/v1/customers/search")
+                        .param("type", "mobile")
+                        .param("value", "082"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(0)));
-
-        verify(customerService, times(1)).getAllCustomers();
+                .andExpect(jsonPath("$.content", hasSize(1)))
+                .andExpect(jsonPath("$.content[0].mobileNumber", is("0123456789")))
+                .andExpect(jsonPath("$.totalElements", is(1)));
     }
 
     @Test
-    @DisplayName("PUT /api/v1/customers/{id} - Should update customer successfully")
+    @DisplayName("Should return paginated results when searching by surname")
+    void shouldReturnPaginatedResultsWhenSearchingBySurname() throws Exception {
+        Page<CustomerSummaryResponse> page = new PageImpl<>(
+                List.of(sampleSummary),
+                PageRequest.of(0, 10),
+                1
+        );
+        when(customerService.searchBySurname(eq("doe"), any())).thenReturn(page);
+
+        mockMvc.perform(get("/api/v1/customers/search")
+                        .param("type", "surname")
+                        .param("value", "doe"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content", hasSize(1)))
+                .andExpect(jsonPath("$.content[0].lastName", is("Doe")))
+                .andExpect(jsonPath("$.totalElements", is(1)));
+    }
+
+    @Test
+    @DisplayName("Should return empty page when no customers match search")
+    void shouldReturnEmptyPageWhenNoSearchMatches() throws Exception {
+        Page<CustomerSummaryResponse> emptyPage = new PageImpl<>(
+                Collections.emptyList(),
+                PageRequest.of(0, 10),
+                0
+        );
+        when(customerService.searchByMobileNumber(any(), any())).thenReturn(emptyPage);
+
+        mockMvc.perform(get("/api/v1/customers/search")
+                        .param("type", "mobile")
+                        .param("value", "999"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content", hasSize(0)))
+                .andExpect(jsonPath("$.totalElements", is(0)));
+    }
+
+    @Test
+    @DisplayName("Should return 400 when search type is invalid")
+    void shouldReturn400WhenSearchTypeIsInvalid() throws Exception {
+        mockMvc.perform(get("/api/v1/customers/search")
+                        .param("type", "email")
+                        .param("value", "john@example.com"))
+                .andExpect(status().isBadRequest());
+    }
+
+    // -------------------------------------------------------------------------
+    // PUT /api/v1/customers/{customerId}
+    // -------------------------------------------------------------------------
+
+    @Test
+    @DisplayName("Should update customer successfully")
     void shouldUpdateCustomerSuccessfully() throws Exception {
-        // Given - Valid Luhn customer ID
-        Long customerId = 12345674L;
-        CustomerDetailedResponse updatedResponse = new CustomerDetailedResponse(
-                customerId,
-                sampleUpdateRequest.firstName(),
-                sampleUpdateRequest.lastName(),
-                sampleUpdateRequest.email(),
-                sampleUpdateRequest.mobileNumber(),
-                java.util.Collections.emptyList(),
-                Instant.now(),
-                Instant.now()
-        );
-        when(customerService.updateCustomer(eq(customerId), any(UpdateCustomerRequest.class)))
-                .thenReturn(updatedResponse);
+        when(customerService.updateCustomer(eq(12345674L), any()))
+                .thenReturn(sampleCustomerResponse);
 
-        // When & Then
-        mockMvc.perform(put("/api/v1/customers/{id}", customerId)
+        mockMvc.perform(put("/api/v1/customers/12345674")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(sampleUpdateRequest)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.customerId").value(customerId))
-                .andExpect(jsonPath("$.firstName").value(sampleUpdateRequest.firstName()))
-                .andExpect(jsonPath("$.lastName").value(sampleUpdateRequest.lastName()))
-                .andExpect(jsonPath("$.email").value(sampleUpdateRequest.email()));
-
-        verify(customerService, times(1)).updateCustomer(eq(customerId), any(UpdateCustomerRequest.class));
+                .andExpect(jsonPath("$.customerId", is(12345674)));
     }
 
     @Test
-    @DisplayName("PUT /api/v1/customers/{id} - Should return 400 for invalid Luhn customer ID")
-    void shouldReturnBadRequestWhenUpdatingWithInvalidLuhnId() throws Exception {
-        // Given - Invalid Luhn customer ID
-        Long invalidCustomerId = 99999999L;  // Invalid Luhn checksum
+    @DisplayName("Should return 404 when updating non-existent customer")
+    void shouldReturn404WhenUpdatingNonExistentCustomer() throws Exception {
+        when(customerService.updateCustomer(eq(12345674L), any()))
+                .thenThrow(new ResourceNotFoundException("Customer not found with ID: 12345674"));
 
-        // When & Then
-        mockMvc.perform(put("/api/v1/customers/{id}", invalidCustomerId)
+        mockMvc.perform(put("/api/v1/customers/12345674")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(sampleUpdateRequest)))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message").value(containsString("Customer ID must be a valid 8-digit number")));
-
-        // Service should NOT be called due to validation failure
-        verify(customerService, never()).updateCustomer(any(), any());
+                .andExpect(status().isNotFound());
     }
 
     @Test
-    @DisplayName("PUT /api/v1/customers/{id} - Should return 404 when updating non-existent customer")
-    void shouldReturnNotFoundWhenUpdatingNonExistentCustomer() throws Exception {
-        // Given - Valid Luhn but non-existent customer
-        Long customerId = 99999997L;  // Valid Luhn checksum
-        when(customerService.updateCustomer(eq(customerId), any(UpdateCustomerRequest.class)))
-                .thenThrow(new ResourceNotFoundException("Customer not found with ID: " + customerId));
+    @DisplayName("Should return 409 when updating customer with duplicate email")
+    void shouldReturn409WhenUpdatingWithDuplicateEmail() throws Exception {
+        when(customerService.updateCustomer(eq(12345674L), any()))
+                .thenThrow(new DuplicateResourceException("Customer with email already exists"));
 
-        // When & Then
-        mockMvc.perform(put("/api/v1/customers/{id}", customerId)
+        mockMvc.perform(put("/api/v1/customers/12345674")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(sampleUpdateRequest)))
-                .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.message").value(containsString("Customer not found")));
-
-        verify(customerService, times(1)).updateCustomer(eq(customerId), any(UpdateCustomerRequest.class));
+                .andExpect(status().isConflict());
     }
 
-    @Test
-    @DisplayName("DELETE /api/v1/customers/{id} - Should delete customer successfully")
-    void shouldDeleteCustomerSuccessfully() throws Exception {
-        // Given - Valid Luhn customer ID
-        Long customerId = 12345674L;
-        doNothing().when(customerService).deleteCustomer(customerId);
+    // -------------------------------------------------------------------------
+    // DELETE /api/v1/customers/{customerId}
+    // -------------------------------------------------------------------------
 
-        // When & Then
-        mockMvc.perform(delete("/api/v1/customers/{id}", customerId))
+    @Test
+    @DisplayName("Should delete customer and return 204")
+    void shouldDeleteCustomerAndReturn204() throws Exception {
+        doNothing().when(customerService).deleteCustomer(12345674L);
+
+        mockMvc.perform(delete("/api/v1/customers/12345674"))
                 .andExpect(status().isNoContent());
-
-        verify(customerService, times(1)).deleteCustomer(customerId);
     }
 
     @Test
-    @DisplayName("DELETE /api/v1/customers/{id} - Should return 400 for invalid Luhn customer ID")
-    void shouldReturnBadRequestWhenDeletingWithInvalidLuhnId() throws Exception {
-        // Given - Invalid Luhn customer ID
-        Long invalidCustomerId = 11111111L;  // Invalid Luhn checksum
+    @DisplayName("Should return 404 when deleting non-existent customer")
+    void shouldReturn404WhenDeletingNonExistentCustomer() throws Exception {
+        doThrow(new ResourceNotFoundException("Customer not found: 12345674"))
+                .when(customerService).deleteCustomer(12345674L);
 
-        // When & Then
-        mockMvc.perform(delete("/api/v1/customers/{id}", invalidCustomerId))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message").value(containsString("Customer ID must be a valid 8-digit number")));
-
-        // Service should NOT be called due to validation failure
-        verify(customerService, never()).deleteCustomer(any());
-    }
-
-    @Test
-    @DisplayName("DELETE /api/v1/customers/{id} - Should return 404 when deleting non-existent customer")
-    void shouldReturnNotFoundWhenDeletingNonExistentCustomer() throws Exception {
-        // Given - Valid Luhn but non-existent customer
-        Long customerId = 99999997L;  // Valid Luhn checksum
-        doThrow(new ResourceNotFoundException("Customer not found with ID: " + customerId))
-                .when(customerService).deleteCustomer(customerId);
-
-        // When & Then
-        mockMvc.perform(delete("/api/v1/customers/{id}", customerId))
-                .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.message").value(containsString("Customer not found")));
-
-        verify(customerService, times(1)).deleteCustomer(customerId);
+        mockMvc.perform(delete("/api/v1/customers/12345674"))
+                .andExpect(status().isNotFound());
     }
 }

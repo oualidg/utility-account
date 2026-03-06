@@ -11,13 +11,14 @@
 package com.mycompany.api.account.repository;
 
 import com.mycompany.api.account.entity.Customer;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
-import java.util.List;
 import java.util.Optional;
 
 /**
@@ -30,7 +31,14 @@ import java.util.Optional;
 @Repository
 public interface CustomerRepository extends JpaRepository<Customer, Long> {
 
-    @EntityGraph(attributePaths = {"accounts"}) // Fetches accounts in the same query
+    /**
+     * Find customer by ID with accounts eagerly fetched in a single query.
+     * Used for detail view where accounts are always needed.
+     *
+     * @param id the customer ID
+     * @return optional containing customer with accounts if found
+     */
+    @EntityGraph(attributePaths = {"accounts"})
     @Query("SELECT c FROM Customer c WHERE c.customerId = :id")
     Optional<Customer> findByIdWithAccounts(@Param("id") Long id);
 
@@ -46,11 +54,42 @@ public interface CustomerRepository extends JpaRepository<Customer, Long> {
     boolean existsByEmailIncludingInactive(@Param("email") String email);
 
     /**
-     * Find customers whose mobile number contains the given string.
-     * Case-insensitive search.
+     * Search customers by mobile number fragment.
      *
-     * @param mobileNumber the mobile number string to search for
-     * @return list of customers with matching mobile numbers
+     * <p><strong>Performance note:</strong>
+     * This method uses {@code LIKE '%fragment%'} which cannot use the B-tree index
+     * on {@code mobile_number}. A prefix match ({@code LIKE 'fragment%'}) would use
+     * the index but requires mobile numbers to be stored in a consistent format.
+     * Currently both {@code 0821234567} and {@code +27821234567} formats exist in
+     * the database. Prerequisite for optimisation: normalise all mobile numbers to
+     * E.164 format ({@code +27821234567}) at write time in CustomerMapper, then
+     * migrate existing data, then switch to {@code findByMobileNumberStartingWith}.</p>
+     *
+     * @param mobileNumber the mobile number fragment to search for
+     * @param pageable     pagination and sort parameters
+     * @return page of matching customers
      */
-    List<Customer> findByMobileNumberContaining(String mobileNumber);
+    Page<Customer> findByMobileNumberContaining(String mobileNumber, Pageable pageable);
+
+    /**
+     * Search customers by last name fragment (case-insensitive contains).
+     *
+     * <p><strong>Performance note — future scalability:</strong>
+     * This method uses {@code LIKE '%fragment%'} which cannot use a standard B-tree
+     * index. At current scale this is acceptable. At 1M+ customers, add a
+     * database-appropriate full-text or trigram index:
+     * <ul>
+     *   <li>PostgreSQL: {@code pg_trgm} GIN index —
+     *       {@code CREATE INDEX idx_customers_last_name_trgm ON customers
+     *       USING GIN (LOWER(last_name) gin_trgm_ops);}</li>
+     *   <li>Oracle: Oracle Text CONTEXT index with {@code CONTAINS()}</li>
+     *   <li>SQL Server: Full-text index with {@code CONTAINS()}</li>
+     * </ul>
+     * No query or method signature change needed — only the index addition.</p>
+     *
+     * @param surname  the surname fragment to search for
+     * @param pageable pagination and sort parameters
+     * @return page of matching customers
+     */
+    Page<Customer> findByLastNameContainingIgnoreCase(String surname, Pageable pageable);
 }
