@@ -26,7 +26,7 @@ WORKDIR /app
 COPY target/utility-account-*.jar app.jar
 
 # Transfer ownership of the JAR to the non-root user.
-RUN chown appuser:appgroup app.jar
+RUN mkdir -p logs/8080 && chown -R appuser:appgroup /app
 
 # Switch to non-root user for all subsequent instructions.
 USER appuser
