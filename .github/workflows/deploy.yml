@@ -1,0 +1,118 @@
+# ==============================================================================
+# GitHub Actions — Backend CI/CD Pipeline
+#
+# Trigger: push to main branch
+#
+# Steps:
+#   1. Checkout source code
+#   2. Set up Java 21
+#   3. Cache Maven dependencies (speeds up subsequent builds)
+#   4. Run full test suite including Testcontainers integration tests
+#   5. Build production JAR (already built by tests, just package)
+#   6. Log in to GitHub Container Registry (GHCR)
+#   7. Build Docker image
+#   8. Push Docker image to GHCR
+#   9. Pull new image and restart stack via docker compose
+#
+# Runner: self-hosted (runs on your Ubuntu server)
+# Registry: ghcr.io (GitHub Container Registry, free private images)
+# ==============================================================================
+
+name: Backend CI/CD
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-deploy:
+    name: Build, Test, Dockerize, Deploy
+    runs-on: self-hosted
+
+    steps:
+
+      # ------------------------------------------------------------------------
+      # Step 1: Checkout
+      # Checks out the repo so the runner has access to source code.
+      # ------------------------------------------------------------------------
+      - name: Checkout source code
+        uses: actions/checkout@v4
+
+      # ------------------------------------------------------------------------
+      # Step 2: Set up Java 21
+      # Ensures the correct JDK version is active for this job.
+      # Uses the system-installed JDK on the self-hosted runner.
+      # ------------------------------------------------------------------------
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      # ------------------------------------------------------------------------
+      # Step 3: Cache Maven dependencies
+      # Caches the ~/.m2 repository between runs.
+      # On first run: downloads all dependencies (~2-3 min).
+      # On subsequent runs: restores from cache (~5 seconds).
+      # Cache key includes pom.xml hash — invalidated when dependencies change.
+      # ------------------------------------------------------------------------
+      - name: Cache Maven dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            ${{ runner.os }}-maven-
+
+      # ------------------------------------------------------------------------
+      # Step 4 & 5: Run tests and build JAR
+      # mvn clean package runs the full lifecycle:
+      #   - compile
+      #   - test (258 tests including Testcontainers integration tests)
+      #   - package (produces utility-account-0.0.1-SNAPSHOT.jar)
+      # Testcontainers spins up a real PostgreSQL container for integration tests.
+      # Docker must be available on the runner — it is, since runner = our server.
+      # ------------------------------------------------------------------------
+      - name: Run tests and build JAR
+        run: mvn clean package
+
+      # ------------------------------------------------------------------------
+      # Step 6: Log in to GitHub Container Registry
+      # Uses GITHUB_TOKEN — automatically provided by GitHub Actions, no setup needed.
+      # github.actor is the user who triggered the push.
+      # ------------------------------------------------------------------------
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # ------------------------------------------------------------------------
+      # Step 7 & 8: Build and push Docker image
+      # Tags the image as both :latest and :<git-sha> for traceability.
+      # :latest — always points to the most recent build
+      # :<sha>  — immutable tag for rollback if needed
+      # ------------------------------------------------------------------------
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: |
+            ghcr.io/oualidg/utility-account:latest
+            ghcr.io/oualidg/utility-account:${{ github.sha }}
+
+      # ------------------------------------------------------------------------
+      # Step 9: Deploy to server
+      # Pulls the new image and restarts the stack.
+      # Since runner IS the server, no SSH needed — runs directly.
+      # --no-deps: only restart springboot, not nginx (avoids unnecessary downtime)
+      # ------------------------------------------------------------------------
+      - name: Deploy
+        run: |
+          cd /opt/utility-account
+          docker compose pull springboot
+          docker compose up -d --no-deps springboot
+          docker image prune -f
