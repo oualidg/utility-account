@@ -62,7 +62,7 @@ databaseChangeLog:
   - changeSet:
       id: 003-seed-dev-payment-providers
       author: oualid.gharach
-      context: dev
+      context: dev,prod
       comment: >
         Seed payment providers with dev API keys for local development.
         MPESA dev key: e7e75fe1-4192-4e34-af5e-6010d787c029 (SHA-256 hashed)
@@ -72,15 +72,15 @@ databaseChangeLog:
             tableName: payment_providers
             columns:
               - column: { name: code, value: "MPESA" }
-              - column: { name: name, value: "M-Pesa" }
+              - column: { name: name, value: "Lipa na M-PESA" }
               - column: { name: api_key_hash, value: "59e043f0424f97e15a3ca18a71329dd48beed0085fcc137e25fd74f8da6a8738" }
               - column: { name: api_key_prefix, value: "e7e75fe1" }
               - column: { name: active, valueBoolean: true }
         - insert:
             tableName: payment_providers
             columns:
-              - column: { name: code, value: "MTN" }
-              - column: { name: name, value: "MTN Mobile Money" }
+              - column: { name: code, value: "MOMO" }
+              - column: { name: name, value: "MoMo from MTN" }
               - column: { name: api_key_hash, value: "dff3275e5484cf1dcd101e5a2e226081d7383af96cebfbec01e187c265872c77" }
               - column: { name: api_key_prefix, value: "0df87c1d" }
               - column: { name: active, valueBoolean: true }

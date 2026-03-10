@@ -70,7 +70,7 @@ databaseChangeLog:
   - changeSet:
       id: 005-seed-dev-admin-user
       author: oualid.gharach
-      context: dev,test
+      context: dev,test,prod
       comment: >
         Seed admin user for local development.
         username: admin / password: admin (BCrypt rounds=12)
