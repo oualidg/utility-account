@@ -20,12 +20,12 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.Instant;
-import java.util.List;
 
 /**
  * REST controller for payment reporting endpoints.
@@ -53,9 +53,10 @@ public class ReportingController {
     private final PaymentQueryService paymentQueryService;
 
     /**
-     * Search payments with optional filters.
+     * Search payments with optional filters, paginated.
      * Overrides the class-level ADMIN restriction — operators need this to view account payment history.
      * All parameters are optional — omit any to broaden the search.
+     * Results are ordered by paymentDate descending (most recent first).
      *
      * @param accountNumber optional account number filter
      * @param customerId    optional customer ID filter
@@ -63,12 +64,14 @@ public class ReportingController {
      * @param receiptNumber optional receipt number prefix filter (case-insensitive)
      * @param from          optional start of date range (inclusive)
      * @param to            optional end of date range (inclusive)
-     * @return list of matching payment responses
+     * @param page          zero-based page index (default 0)
+     * @param size          number of records per page (default 10)
+     * @return page of matching payment responses
      */
     @GetMapping("/payments")
     @PreAuthorize("hasAnyRole('ADMIN', 'OPERATOR')")
-    @Operation(summary = "Search payments", description = "Search payments by account, customer, provider, receipt, or date range")
-    public ResponseEntity<List<PaymentResponse>> searchPayments(
+    @Operation(summary = "Search payments", description = "Search payments by account, customer, provider, receipt, or date range. Results are paginated.")
+    public ResponseEntity<Page<PaymentResponse>> searchPayments(
             @RequestParam(required = false)
             @ValidLuhn(length = 10, message = "Account number must be a valid 10-digit number with checksum")
             Long accountNumber,
@@ -79,18 +82,21 @@ public class ReportingController {
 
             @RequestParam(required = false) String providerCode,
 
-            // [ADDED] receipt prefix filter — % appended in repository, not here
             @RequestParam(required = false) String receiptNumber,
 
             @RequestParam(required = false) Instant from,
 
-            @RequestParam(required = false) Instant to) {
+            @RequestParam(required = false) Instant to,
 
-        log.info("Search payments request: accountNumber={}, customerId={}, providerCode={}, receiptNumber={}, from={}, to={}",
-                accountNumber, customerId, providerCode, receiptNumber, from, to);
+            @RequestParam(defaultValue = "0")  int page,
+
+            @RequestParam(defaultValue = "10") int size) {
+
+        log.info("Search payments request: accountNumber={}, customerId={}, providerCode={}, receiptNumber={}, from={}, to={}, page={}, size={}",
+                accountNumber, customerId, providerCode, receiptNumber, from, to, page, size);
 
         return ResponseEntity.ok(
-                paymentQueryService.searchPayments(accountNumber, customerId, providerCode, receiptNumber, from, to)
+                paymentQueryService.searchPayments(accountNumber, customerId, providerCode, receiptNumber, from, to, page, size)
         );
     }
 
@@ -163,7 +169,7 @@ public class ReportingController {
     /**
      * Full provider reconciliation report for a given period.
      * Returns totals plus the complete list of all payments for the period.
-     * Used exclusively for CSV export — not for UI table display.
+     * Used exclusively for CSV export — intentionally unbounded, not for UI table display.
      *
      * @param providerCode the provider code
      * @param from         optional start of date range (inclusive)

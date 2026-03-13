@@ -25,6 +25,9 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -36,6 +39,7 @@ import java.util.List;
 
 import static org.hamcrest.Matchers.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -83,43 +87,75 @@ class ReportingControllerTest extends BaseWebMvcTest {
     // -------------------------------------------------------------------------
 
     @Test
-    @DisplayName("Should return payments for valid search filters")
+    @DisplayName("Should return paginated payments for valid search filters")
     void shouldReturnPaymentsForValidFilters() throws Exception {
-        when(paymentQueryService.searchPayments(any(), any(), any(), any(), any(), any()))
-                .thenReturn(List.of(samplePayment));
+        Page<PaymentResponse> page = new PageImpl<>(
+                List.of(samplePayment), PageRequest.of(0, 10), 1
+        );
+
+        when(paymentQueryService.searchPayments(any(), any(), any(), any(), any(), any(), anyInt(), anyInt()))
+                .thenReturn(page);
 
         mockMvc.perform(get("/api/v1/reports/payments")
                         .param("providerCode", "MPESA"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(1)))
-                .andExpect(jsonPath("$[0].receiptNumber", is("receipt-uuid-001")))
-                .andExpect(jsonPath("$[0].providerCode", is("MPESA")))
-                .andExpect(jsonPath("$[0].amount", is(150.00)));
+                .andExpect(jsonPath("$.content", hasSize(1)))
+                .andExpect(jsonPath("$.content[0].receiptNumber", is("receipt-uuid-001")))
+                .andExpect(jsonPath("$.content[0].providerCode", is("MPESA")))
+                .andExpect(jsonPath("$.content[0].amount", is(150.00)))
+                .andExpect(jsonPath("$.totalElements", is(1)))
+                .andExpect(jsonPath("$.totalPages", is(1)));
     }
 
     @Test
-    @DisplayName("Should return empty list when no payments match")
-    void shouldReturnEmptyListWhenNoPaymentsMatch() throws Exception {
-        when(paymentQueryService.searchPayments(any(), any(), any(), any(), any(), any()))
-                .thenReturn(List.of());
+    @DisplayName("Should return empty page when no payments match")
+    void shouldReturnEmptyPageWhenNoPaymentsMatch() throws Exception {
+        Page<PaymentResponse> emptyPage = new PageImpl<>(
+                List.of(), PageRequest.of(0, 10), 0
+        );
+
+        when(paymentQueryService.searchPayments(any(), any(), any(), any(), any(), any(), anyInt(), anyInt()))
+                .thenReturn(emptyPage);
 
         mockMvc.perform(get("/api/v1/reports/payments"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(0)));
+                .andExpect(jsonPath("$.content", hasSize(0)))
+                .andExpect(jsonPath("$.totalElements", is(0)));
     }
 
+    @Test
+    @DisplayName("Should pass page and size params to service")
+    void shouldPassPageAndSizeToService() throws Exception {
+        Page<PaymentResponse> page = new PageImpl<>(
+                List.of(samplePayment), PageRequest.of(2, 5), 15
+        );
+
+        when(paymentQueryService.searchPayments(any(), any(), any(), any(), any(), any(), eq(2), eq(5)))
+                .thenReturn(page);
+
+        mockMvc.perform(get("/api/v1/reports/payments")
+                        .param("page", "2")
+                        .param("size", "5"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements", is(15)))
+                .andExpect(jsonPath("$.totalPages", is(3)));
+    }
 
     @Test
     @DisplayName("Should return payments filtered by receipt prefix")
     void shouldReturnPaymentsFilteredByReceiptPrefix() throws Exception {
-        when(paymentQueryService.searchPayments(any(), any(), any(), eq("receipt-uuid"), any(), any()))
-                .thenReturn(List.of(samplePayment));
+        Page<PaymentResponse> page = new PageImpl<>(
+                List.of(samplePayment), PageRequest.of(0, 10), 1
+        );
+
+        when(paymentQueryService.searchPayments(any(), any(), any(), eq("receipt-uuid"), any(), any(), anyInt(), anyInt()))
+                .thenReturn(page);
 
         mockMvc.perform(get("/api/v1/reports/payments")
                         .param("receiptNumber", "receipt-uuid"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(1)))
-                .andExpect(jsonPath("$[0].receiptNumber", is("receipt-uuid-001")));
+                .andExpect(jsonPath("$.content", hasSize(1)))
+                .andExpect(jsonPath("$.content[0].receiptNumber", is("receipt-uuid-001")));
     }
 
     @Test
@@ -213,7 +249,7 @@ class ReportingControllerTest extends BaseWebMvcTest {
 
         mockMvc.perform(get("/api/v1/reports/providers/MPESA/summary")
                         .param("from", "2026-03-01T00:00:00Z")
-                        .param("to", "2026-03-31T23:59:59Z"))
+                        .param("to",   "2026-03-31T23:59:59Z"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.providerCode", is("MPESA")))
                 .andExpect(jsonPath("$.providerName", is("M-Pesa")))

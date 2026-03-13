@@ -12,6 +12,8 @@ package com.mycompany.api.account.repository;
 
 import com.mycompany.api.account.entity.Payment;
 import com.mycompany.api.account.entity.PaymentProvider;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -56,9 +58,9 @@ public interface PaymentRepository extends JpaRepository<Payment, String> {
     );
 
     /**
-     * Search payments with all-optional filters.
+     * Search payments with all-optional filters, paginated.
      * Null parameters are ignored — only provided filters are applied.
-     * Results ordered by paymentDate descending (most recent first).
+     * Sort order is determined by the {@link Pageable} argument passed from the service layer.
      *
      * <p><strong>Receipt number search — prefix match only:</strong>
      * The {@code receiptNumber} parameter uses a prefix LIKE pattern ({@code fragment%})
@@ -74,20 +76,41 @@ public interface PaymentRepository extends JpaRepository<Payment, String> {
      * @param receiptNumber  optional receipt number prefix filter (case-insensitive, prefix match)
      * @param from           optional start of date range (inclusive)
      * @param to             optional end of date range (inclusive)
-     * @return list of matching payments
+     * @param pageable       page number, page size, and sort order
+     * @return page of matching payments
      */
-    default List<Payment> searchPayments(Long accountNumber, Long customerId,
+    default Page<Payment> searchPayments(Long accountNumber, Long customerId,
                                          String providerCode, String receiptNumber,
-                                         Instant from, Instant to) {
+                                         Instant from, Instant to, Pageable pageable) {
         return searchPaymentsQuery(
                 accountNumber, customerId, providerCode,
                 receiptNumber != null ? receiptNumber.toLowerCase() + "%" : null,
                 from != null ? from : Instant.EPOCH,
-                to   != null ? to   : FAR_FUTURE
+                to   != null ? to   : FAR_FUTURE,
+                pageable
         );
     }
 
-    @Query("SELECT p FROM Payment p " +
+    /**
+     * Underlying paginated query for {@link #searchPayments}.
+     * Not intended to be called directly — use the public default method which
+     * handles null-safe date normalisation and receipt number prefix formatting.
+     *
+     * <p>A separate {@code countQuery} is required because the main query uses
+     * {@code JOIN FETCH}, which is incompatible with Spring Data's automatic count
+     * derivation for pagination. The count query uses plain joins without fetching.</p>
+     *
+     * <p>{@code ORDER BY} is intentionally omitted from the JPQL — sort direction
+     * is delegated to the {@link Pageable} argument to avoid conflicts.</p>
+     * <p><strong>TODO (performance — deferred):</strong>
+     * The count query runs on every page navigation, including page 2, 3, etc.
+     * At high volumes, consider accepting {@code totalElements} as a hint from the
+     * client on subsequent requests and skipping the count query when it is provided.
+     * Spring Data supports this via {@link org.springframework.data.domain.PageImpl}
+     * — construct it manually with the known total instead of delegating to the
+     * repository count. Not needed at current data volumes.</p>
+     */
+    @Query(value = "SELECT p FROM Payment p " +
             "JOIN FETCH p.paymentProvider pp " +
             "JOIN FETCH p.account a " +
             "JOIN FETCH a.customer c " +
@@ -96,15 +119,25 @@ public interface PaymentRepository extends JpaRepository<Payment, String> {
             "AND (:providerCode IS NULL OR pp.code        = :providerCode) " +
             "AND (:receiptNumber IS NULL OR LOWER(p.receiptNumber) LIKE :receiptNumber) " +
             "AND p.paymentDate >= :from " +
-            "AND p.paymentDate <= :to " +
-            "ORDER BY p.paymentDate DESC")
-    List<Payment> searchPaymentsQuery(
+            "AND p.paymentDate <= :to",
+            countQuery = "SELECT COUNT(p) FROM Payment p " +
+                    "JOIN p.account a " +
+                    "JOIN a.customer c " +
+                    "JOIN p.paymentProvider pp " +
+                    "WHERE (:accountNumber IS NULL OR a.accountNumber = :accountNumber) " +
+                    "AND (:customerId   IS NULL OR c.customerId   = :customerId) " +
+                    "AND (:providerCode IS NULL OR pp.code        = :providerCode) " +
+                    "AND (:receiptNumber IS NULL OR LOWER(p.receiptNumber) LIKE :receiptNumber) " +
+                    "AND p.paymentDate >= :from " +
+                    "AND p.paymentDate <= :to")
+    Page<Payment> searchPaymentsQuery(
             @Param("accountNumber") Long accountNumber,
             @Param("customerId")    Long customerId,
             @Param("providerCode")  String providerCode,
             @Param("receiptNumber") String receiptNumber,
             @Param("from")          Instant from,
-            @Param("to")            Instant to
+            @Param("to")            Instant to,
+            Pageable pageable
     );
 
     /**
@@ -220,7 +253,8 @@ public interface PaymentRepository extends JpaRepository<Payment, String> {
 
     /**
      * All payments for a provider within a date range, with account details.
-     * Used to build the settlement report for CSV export.
+     * Used to build the settlement report for CSV export — intentionally unbounded,
+     * as the full dataset is required for an accurate reconciliation.
      * Null dates default to all-time range.
      *
      * @param providerCode provider code to filter by

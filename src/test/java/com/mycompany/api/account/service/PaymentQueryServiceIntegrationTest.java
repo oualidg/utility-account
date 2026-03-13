@@ -25,12 +25,12 @@ import com.mycompany.api.account.repository.PaymentProviderRepository;
 import com.mycompany.api.account.repository.PaymentRepository;
 import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
-import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -57,8 +57,8 @@ class PaymentQueryServiceIntegrationTest extends BaseIntegrationTest {
         jdbcTemplate.execute("DELETE FROM customers");
         jdbcTemplate.execute("DELETE FROM payment_providers");
 
-        mpesa = seedProvider("MPESA", "M-Pesa", "mpesa-test-hash", "mpesa123");
-        mtn   = seedProvider("MTN", "MTN Mobile Money", "mtn-test-hash", "mtn12345");
+        mpesa = seedProvider("MPESA", "M-Pesa",           "mpesa-test-hash", "mpesa123");
+        mtn   = seedProvider("MTN",   "MTN Mobile Money", "mtn-test-hash",   "mtn12345");
 
         Customer customer1 = saveCustomer(12345674L, "alice@test.com", "+27821000001");
         Customer customer2 = saveCustomer(98765438L, "bob@test.com",   "+27821000002");
@@ -68,7 +68,7 @@ class PaymentQueryServiceIntegrationTest extends BaseIntegrationTest {
     }
 
     // -------------------------------------------------------------------------
-    // searchPayments
+    // searchPayments — filters
     // -------------------------------------------------------------------------
 
     @Test
@@ -77,9 +77,11 @@ class PaymentQueryServiceIntegrationTest extends BaseIntegrationTest {
         savePayment(account1, mpesa, "REF-001", new BigDecimal("100.00"), Instant.now());
         savePayment(account2, mtn,   "REF-002", new BigDecimal("200.00"), Instant.now());
 
-        List<PaymentResponse> results = paymentQueryService.searchPayments(null, null,
-                null, null, null, null);
-        assertThat(results).hasSize(2);
+        Page<PaymentResponse> results = paymentQueryService.searchPayments(
+                null, null, null, null, null, null, 0, 10);
+
+        assertThat(results.getContent()).hasSize(2);
+        assertThat(results.getTotalElements()).isEqualTo(2);
     }
 
     @Test
@@ -88,11 +90,12 @@ class PaymentQueryServiceIntegrationTest extends BaseIntegrationTest {
         savePayment(account1, mpesa, "REF-001", new BigDecimal("100.00"), Instant.now());
         savePayment(account2, mtn,   "REF-002", new BigDecimal("200.00"), Instant.now());
 
-        List<PaymentResponse> results = paymentQueryService
-                .searchPayments(account1.getAccountNumber(), null, null, null, null, null);
+        Page<PaymentResponse> results = paymentQueryService.searchPayments(
+                account1.getAccountNumber(), null, null, null, null, null, 0, 10);
 
-        assertThat(results).hasSize(1);
-        assertThat(results.getFirst().accountNumber()).isEqualTo(account1.getAccountNumber());
+        assertThat(results.getContent()).hasSize(1);
+        assertThat(results.getContent().getFirst().accountNumber())
+                .isEqualTo(account1.getAccountNumber());
     }
 
     @Test
@@ -101,11 +104,12 @@ class PaymentQueryServiceIntegrationTest extends BaseIntegrationTest {
         savePayment(account1, mpesa, "REF-001", new BigDecimal("100.00"), Instant.now());
         savePayment(account2, mtn,   "REF-002", new BigDecimal("200.00"), Instant.now());
 
-        List<PaymentResponse> results = paymentQueryService
-                .searchPayments(null, account1.getCustomer().getCustomerId(), null, null, null, null);
+        Page<PaymentResponse> results = paymentQueryService.searchPayments(
+                null, account1.getCustomer().getCustomerId(), null, null, null, null, 0, 10);
 
-        assertThat(results).hasSize(1);
-        assertThat(results.getFirst().accountNumber()).isEqualTo(account1.getAccountNumber());
+        assertThat(results.getContent()).hasSize(1);
+        assertThat(results.getContent().getFirst().accountNumber())
+                .isEqualTo(account1.getAccountNumber());
     }
 
     @Test
@@ -114,36 +118,37 @@ class PaymentQueryServiceIntegrationTest extends BaseIntegrationTest {
         savePayment(account1, mpesa, "REF-001", new BigDecimal("100.00"), Instant.now());
         savePayment(account2, mtn,   "REF-002", new BigDecimal("200.00"), Instant.now());
 
-        List<PaymentResponse> results = paymentQueryService
-                .searchPayments(null, null, "MPESA", null, null, null);
+        Page<PaymentResponse> results = paymentQueryService.searchPayments(
+                null, null, "MPESA", null, null, null, 0, 10);
 
-        assertThat(results).hasSize(1);
-        assertThat(results.getFirst().providerCode()).isEqualTo("MPESA");
+        assertThat(results.getContent()).hasSize(1);
+        assertThat(results.getContent().getFirst().providerCode()).isEqualTo("MPESA");
     }
 
     @Test
     @DisplayName("Should filter payments by date range")
     void shouldFilterByDateRange() {
-        Instant yesterday = Instant.now().minus(1, ChronoUnit.DAYS);
+        Instant yesterday  = Instant.now().minus(1, ChronoUnit.DAYS);
         Instant twoDaysAgo = Instant.now().minus(2, ChronoUnit.DAYS);
 
         savePayment(account1, mpesa, "REF-001", new BigDecimal("100.00"), Instant.now());
         savePayment(account2, mtn,   "REF-002", new BigDecimal("200.00"), twoDaysAgo);
 
-        List<PaymentResponse> results = paymentQueryService
-                .searchPayments(null, null, null, null, yesterday, null);
+        Page<PaymentResponse> results = paymentQueryService.searchPayments(
+                null, null, null, null, yesterday, null, 0, 10);
 
-        assertThat(results).hasSize(1);
-        assertThat(results.getFirst().paymentReference()).isEqualTo("REF-001");
+        assertThat(results.getContent()).hasSize(1);
+        assertThat(results.getContent().getFirst().paymentReference()).isEqualTo("REF-001");
     }
 
     @Test
-    @DisplayName("Should return empty list when no payments match filters")
-    void shouldReturnEmptyListWhenNoMatch() {
-        List<PaymentResponse> results = paymentQueryService
-                .searchPayments(null, null, "MPESA", null, null, null);
+    @DisplayName("Should return empty page when no payments match filters")
+    void shouldReturnEmptyPageWhenNoMatch() {
+        Page<PaymentResponse> results = paymentQueryService.searchPayments(
+                null, null, "MPESA", null, null, null, 0, 10);
 
-        assertThat(results).isEmpty();
+        assertThat(results.getContent()).isEmpty();
+        assertThat(results.getTotalElements()).isZero();
     }
 
     @Test
@@ -153,11 +158,56 @@ class PaymentQueryServiceIntegrationTest extends BaseIntegrationTest {
         savePayment(account2, mtn, "REF-002", new BigDecimal("200.00"), Instant.now());
 
         String prefix = p1.getReceiptNumber().substring(0, 8);
-        List<PaymentResponse> results = paymentQueryService
-                .searchPayments(null, null, null, prefix, null, null);
+        Page<PaymentResponse> results = paymentQueryService.searchPayments(
+                null, null, null, prefix, null, null, 0, 10);
 
-        assertThat(results).hasSize(1);
-        assertThat(results.getFirst().receiptNumber()).isEqualTo(p1.getReceiptNumber());
+        assertThat(results.getContent()).hasSize(1);
+        assertThat(results.getContent().getFirst().receiptNumber())
+                .isEqualTo(p1.getReceiptNumber());
+    }
+
+    // -------------------------------------------------------------------------
+    // searchPayments — pagination
+    // -------------------------------------------------------------------------
+
+    @Test
+    @DisplayName("Should return correct page of results")
+    void shouldReturnCorrectPage() {
+        for (int i = 1; i <= 5; i++) {
+            savePayment(account1, mpesa, "REF-00" + i, new BigDecimal("100.00"),
+                    Instant.now().minus(i, ChronoUnit.SECONDS));
+        }
+
+        Page<PaymentResponse> page0 = paymentQueryService.searchPayments(
+                null, null, null, null, null, null, 0, 3);
+        Page<PaymentResponse> page1 = paymentQueryService.searchPayments(
+                null, null, null, null, null, null, 1, 3);
+
+        assertThat(page0.getContent()).hasSize(3);
+        assertThat(page0.getTotalElements()).isEqualTo(5);
+        assertThat(page0.getTotalPages()).isEqualTo(2);
+
+        assertThat(page1.getContent()).hasSize(2);
+        assertThat(page1.getTotalElements()).isEqualTo(5);
+    }
+
+    @Test
+    @DisplayName("Should return results ordered by paymentDate descending")
+    void shouldReturnResultsOrderedByPaymentDateDescending() {
+        Instant now       = Instant.now();
+        Instant oneSecAgo = now.minus(1, ChronoUnit.SECONDS);
+        Instant twoSecAgo = now.minus(2, ChronoUnit.SECONDS);
+
+        savePayment(account1, mpesa, "REF-OLDEST", new BigDecimal("100.00"), twoSecAgo);
+        savePayment(account1, mpesa, "REF-MIDDLE", new BigDecimal("100.00"), oneSecAgo);
+        savePayment(account1, mpesa, "REF-NEWEST", new BigDecimal("100.00"), now);
+
+        Page<PaymentResponse> results = paymentQueryService.searchPayments(
+                null, null, null, null, null, null, 0, 10);
+
+        assertThat(results.getContent().get(0).paymentReference()).isEqualTo("REF-NEWEST");
+        assertThat(results.getContent().get(1).paymentReference()).isEqualTo("REF-MIDDLE");
+        assertThat(results.getContent().get(2).paymentReference()).isEqualTo("REF-OLDEST");
     }
 
     // -------------------------------------------------------------------------
@@ -299,7 +349,7 @@ class PaymentQueryServiceIntegrationTest extends BaseIntegrationTest {
     }
 
     private Payment savePayment(Account account, PaymentProvider provider,
-                             String reference, BigDecimal amount, Instant date) {
+                                String reference, BigDecimal amount, Instant date) {
         Payment p = new Payment();
         p.setReceiptNumber(java.util.UUID.randomUUID().toString());
         p.setAccount(account);

@@ -21,6 +21,9 @@ import com.mycompany.api.account.repository.PaymentProviderRepository;
 import com.mycompany.api.account.repository.PaymentRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -44,8 +47,12 @@ public class PaymentQueryService {
     private final PaymentMapper paymentMapper;
 
     /**
-     * Search payments with all-optional filters.
+     * Search payments with all-optional filters, paginated.
      * Used by the general payment search endpoint.
+     *
+     * <p>Results are ordered by {@code paymentDate} descending (most recent first).
+     * Sort is applied via {@link PageRequest} rather than in JPQL to avoid conflicts
+     * with Spring Data pagination.</p>
      *
      * <p><strong>Receipt number search — prefix match only:</strong>
      * The {@code receiptNumber} parameter is passed directly to the repository
@@ -61,20 +68,23 @@ public class PaymentQueryService {
      * @param receiptNumber optional receipt number prefix filter
      * @param from          optional start of date range (inclusive)
      * @param to            optional end of date range (inclusive)
-     * @return list of matching payment responses
+     * @param page          zero-based page index
+     * @param size          number of records per page
+     * @return page of matching payment responses
      */
     @Transactional(readOnly = true)
-    public List<PaymentResponse> searchPayments(Long accountNumber, Long customerId,
+    public Page<PaymentResponse> searchPayments(Long accountNumber, Long customerId,
                                                 String providerCode, String receiptNumber,
-                                                Instant from, Instant to) {
-        log.info("Payment search: accountNumber={}, customerId={}, providerCode={}, receiptNumber={}, from={}, to={}",
-                accountNumber, customerId, providerCode, receiptNumber, from, to);
+                                                Instant from, Instant to,
+                                                int page, int size) {
+        log.info("Payment search: accountNumber={}, customerId={}, providerCode={}, receiptNumber={}, from={}, to={}, page={}, size={}",
+                accountNumber, customerId, providerCode, receiptNumber, from, to, page, size);
+
+        var pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "paymentDate"));
 
         return paymentRepository
-                .searchPayments(accountNumber, customerId, providerCode, receiptNumber, from, to)
-                .stream()
-                .map(paymentMapper::toResponse)
-                .toList();
+                .searchPayments(accountNumber, customerId, providerCode, receiptNumber, from, to, pageable)
+                .map(paymentMapper::toResponse);
     }
 
     /**
@@ -180,7 +190,8 @@ public class PaymentQueryService {
     /**
      * Full provider reconciliation report for a given period.
      * Returns totals plus the complete list of all payments.
-     * Used exclusively for CSV export — not for UI display.
+     * Used exclusively for CSV export — intentionally unbounded, as the full
+     * dataset is required for an accurate reconciliation. Not for UI display.
      *
      * @param providerCode the provider code
      * @param from         optional start of date range (inclusive)
