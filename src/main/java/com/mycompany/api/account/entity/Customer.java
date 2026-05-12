@@ -50,7 +50,7 @@ import java.util.List;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-@SQLRestriction("active = true")
+@SQLRestriction("active = true") // automatically appends AND active = true to any query that joins or loads Customer
 public class Customer implements Persistable<Long> {
 
     @Id

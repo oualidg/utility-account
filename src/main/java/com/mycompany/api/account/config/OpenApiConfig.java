@@ -116,6 +116,20 @@ public class OpenApiConfig {
                 return;
             }
 
+            if (path.matches("/api/v1/accounts/\\{.*}/validate")
+                    && item.getGet() != null) {
+                item.getGet().addSecurityItem(
+                        new SecurityRequirement().addList("ApiKeyAuth"));
+                return;
+            }
+
+            if (path.matches("/api/v1/customers/\\{.*}/validate")
+                    && item.getGet() != null) {
+                item.getGet().addSecurityItem(
+                        new SecurityRequirement().addList("ApiKeyAuth"));
+                return;
+            }
+
             // Login endpoint — add X-Auth-Mode header pre-filled with "bearer"
             if (path.equals("/api/auth/login") && item.getPost() != null) {
                 item.getPost().addParametersItem(

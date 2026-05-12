@@ -117,6 +117,13 @@
             <artifactId>spring-security-oauth2-jose</artifactId>
         </dependency>
 
+        <!-- Resilience4j (Rate limiter — payment API burst protection) -->
+        <dependency>
+            <groupId>io.github.resilience4j</groupId>
+            <artifactId>resilience4j-spring-boot3</artifactId>
+            <version>2.2.0</version>
+        </dependency>
+
         <!-- Spring Boot Test (Testing framework) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

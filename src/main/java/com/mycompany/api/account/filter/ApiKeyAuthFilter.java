@@ -12,18 +12,14 @@ package com.mycompany.api.account.filter;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.mycompany.api.account.config.SecurityConfig;
-import com.mycompany.api.account.dto.ErrorResponse;
 import com.mycompany.api.account.entity.PaymentProvider;
 import com.mycompany.api.account.service.ProviderService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
-import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 import java.util.Optional;
@@ -41,17 +37,23 @@ import java.util.Optional;
  * <p>Registered explicitly in {@link SecurityConfig} via
  * {@code addFilterBefore} — not a Spring-managed component.</p>
  *
+ * <p>Extends {@link AbstractPaymentFilter} for shared endpoint pattern
+ * matching and error response writing.</p>
+ *
  * @author Oualid Gharach
  */
 @Slf4j
-@RequiredArgsConstructor
-public class ApiKeyAuthFilter extends OncePerRequestFilter {
+public class ApiKeyAuthFilter extends AbstractPaymentFilter {
 
     public static final String API_KEY_HEADER = "X-Api-Key";
     public static final String PROVIDER_ATTRIBUTE = "authenticatedProvider";
 
     private final ProviderService providerService;
-    private final ObjectMapper objectMapper;
+
+    public ApiKeyAuthFilter(ProviderService providerService, ObjectMapper objectMapper) {
+        super(objectMapper);
+        this.providerService = providerService;
+    }
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,
@@ -83,26 +85,4 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
         filterChain.doFilter(request, response);
     }
 
-    @Override
-    protected boolean shouldNotFilter(HttpServletRequest request) {
-        String path = request.getRequestURI();
-        String method = request.getMethod();
-
-        boolean isDepositToAccount = "POST".equals(method) && path.matches(".*/api/v1/accounts/\\d+/payments");
-        boolean isDepositToCustomer = "POST".equals(method) && path.matches(".*/api/v1/customers/\\d+/payments");
-        boolean isConfirmation = "GET".equals(method) && path.matches(".*/api/v1/payments/confirmation/.+");
-
-        return !(isDepositToAccount || isDepositToCustomer || isConfirmation);
-    }
-
-    /**
-     * Send a JSON error response consistent with GlobalExceptionHandler format.
-     */
-    private void sendError(HttpServletResponse response, HttpServletRequest request,
-                           HttpStatus status, String message) throws IOException {
-        ErrorResponse errorResponse = ErrorResponse.of(status, message, request.getRequestURI());
-        response.setStatus(status.value());
-        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-        response.getWriter().write(objectMapper.writeValueAsString(errorResponse));
-    }
 }

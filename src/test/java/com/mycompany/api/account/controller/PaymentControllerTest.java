@@ -21,6 +21,7 @@ import com.mycompany.api.account.entity.PaymentProvider;
 import com.mycompany.api.account.exception.ResourceNotFoundException;
 import com.mycompany.api.account.mapper.PaymentMapper;
 import com.mycompany.api.account.service.PaymentService;
+import com.mycompany.api.account.service.PaymentValidationService;
 import com.mycompany.api.account.service.ProviderService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -73,6 +74,9 @@ class PaymentControllerTest extends BaseWebMvcTest {
 
     @MockitoBean
     private ProviderService providerService;
+
+    @MockitoBean
+    private PaymentValidationService paymentValidationService;
 
     // =========================================================================
     // POST /api/v1/accounts/{accountNumber}/payments - Deposit to Account
@@ -338,6 +342,74 @@ class PaymentControllerTest extends BaseWebMvcTest {
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.message",
                         is("Payment not found with provider MPESA and reference " + reference)));
+    }
+
+    // =========================================================================
+    // GET /api/v1/accounts/{accountNumber}/validate
+    // =========================================================================
+
+    @Test
+    @DisplayName("Should return 200 when account is valid")
+    void shouldReturn200WhenAccountIsValid() throws Exception {
+        when(paymentValidationService.isAccountValid(1234567897L)).thenReturn(true);
+
+        mockMvc.perform(get("/api/v1/accounts/{accountNumber}/validate", 1234567897L)
+                        .requestAttr(PROVIDER_ATTR, createMpesaProvider()))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("Should return 404 when account is not found")
+    void shouldReturn404WhenAccountNotFoundOnValidate() throws Exception {
+        when(paymentValidationService.isAccountValid(1234567897L)).thenReturn(false);
+
+        mockMvc.perform(get("/api/v1/accounts/{accountNumber}/validate", 1234567897L)
+                        .requestAttr(PROVIDER_ATTR, createMpesaProvider()))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    @DisplayName("Should return 400 when account number fails Luhn validation on validate endpoint")
+    void shouldReturn400WhenAccountNumberFailsLuhnOnValidate() throws Exception {
+        mockMvc.perform(get("/api/v1/accounts/{accountNumber}/validate", 1234567891L)
+                        .requestAttr(PROVIDER_ATTR, createMpesaProvider()))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message",
+                        is("Account number must be a valid 10-digit number with checksum")));
+    }
+
+    // =========================================================================
+    // GET /api/v1/customers/{customerId}/validate
+    // =========================================================================
+
+    @Test
+    @DisplayName("Should return 200 when customer is valid")
+    void shouldReturn200WhenCustomerIsValid() throws Exception {
+        when(paymentValidationService.isCustomerValid(12345674L)).thenReturn(true);
+
+        mockMvc.perform(get("/api/v1/customers/{customerId}/validate", 12345674L)
+                        .requestAttr(PROVIDER_ATTR, createMpesaProvider()))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("Should return 404 when customer is not found on validate endpoint")
+    void shouldReturn404WhenCustomerNotFoundOnValidate() throws Exception {
+        when(paymentValidationService.isCustomerValid(12345674L)).thenReturn(false);
+
+        mockMvc.perform(get("/api/v1/customers/{customerId}/validate", 12345674L)
+                        .requestAttr(PROVIDER_ATTR, createMpesaProvider()))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    @DisplayName("Should return 400 when customer ID fails Luhn validation on validate endpoint")
+    void shouldReturn400WhenCustomerIdFailsLuhnOnValidate() throws Exception {
+        mockMvc.perform(get("/api/v1/customers/{customerId}/validate", 12345671L)
+                        .requestAttr(PROVIDER_ATTR, createMpesaProvider()))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message",
+                        is("Customer ID must be a valid 8-digit number with checksum")));
     }
 
     // =========================================================================

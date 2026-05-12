@@ -11,6 +11,7 @@
 package com.mycompany.api.account;
 
 import com.mycompany.api.account.service.JwtService;
+import io.github.resilience4j.ratelimiter.RateLimiterRegistry;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -21,6 +22,8 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
  * <p>Provides:</p>
  * <ul>
  *   <li>{@code @MockitoBean JwtService} — required by {@code JwtAuthFilter}</li>
+ *   <li>{@code @MockitoBean RateLimiterRegistry} — required by {@code PaymentApiRateLimitFilter}
+ *       which is picked up as a {@code @Component} by the web layer context</li>
  *   <li>{@code @ActiveProfiles("test")} — activates test properties</li>
  * </ul>
  *
@@ -36,4 +39,7 @@ public abstract class BaseWebMvcTest {
 
     @MockitoBean
     protected JwtService jwtService;
+
+    @MockitoBean
+    protected RateLimiterRegistry rateLimiterRegistry;
 }
