@@ -73,7 +73,7 @@
           Supports multiple instances on different ports
           Uses spring.application.name for flexibility
         -->
-        <file>logs/${instancePort}/${appName}.log</file>
+        <file>logs/${appName}.log</file>
 
         <encoder>
             <pattern>${LOG_PATTERN}</pattern>
