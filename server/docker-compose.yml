@@ -48,6 +48,8 @@ services:
   # ----------------------------------------------------------------------------
   utility-account:
     image: ghcr.io/oualidg/utility-account:latest
+    ports:
+      - "8080:8080"
     container_name: utility-account
     restart: unless-stopped
     mem_limit: 768m
@@ -86,6 +88,8 @@ services:
   # ----------------------------------------------------------------------------
   mpesa-gateway:
     image: ghcr.io/oualidg/mpesa-gateway:latest
+    ports:
+      - "8081:8081"
     container_name: mpesa-gateway
     restart: unless-stopped
     mem_limit: 512m
@@ -189,15 +193,18 @@ services:
   # ----------------------------------------------------------------------------
   rabbitmq:
     image: rabbitmq:3-management-alpine
+    ports:
+      - "15672:15672"
     container_name: rabbitmq
     restart: unless-stopped
     mem_limit: 512m
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS}
-      RABBITMQ_DEFAULT_VHOST: /payments
     volumes:
       - rabbitmq-data:/var/lib/rabbitmq
+      - ./rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf
+      - ./rabbitmq/definitions.json:/etc/rabbitmq/definitions.json
     networks:
       - payments-network
     healthcheck:
@@ -224,13 +231,14 @@ services:
     container_name: mongodb
     restart: unless-stopped
     mem_limit: 512m
-    command: ["mongod", "--replSet", "rs0", "--bind_ip_all"]
+    command: ["mongod", "--replSet", "rs0", "--bind_ip_all", "--keyFile", "/etc/mongodb/mongodb.key"]
     environment:
       MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER}
       MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASS}
       MONGO_INITDB_DATABASE: mpesa
     volumes:
       - mongodb-data:/data/db
+      - ./mongodb.key:/etc/mongodb/mongodb.key:ro
     networks:
       - payments-network
     healthcheck:
