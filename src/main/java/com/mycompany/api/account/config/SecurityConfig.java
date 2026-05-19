@@ -132,6 +132,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/health/**").permitAll()
                         // Public — actuator info
                         .requestMatchers("/api/info").permitAll()
+                        // Public — Prometheus metrics scraping (internal network only, no sensitive data)
+                        .requestMatchers("/api/prometheus").permitAll()
                         // Public — OpenAPI/Swagger
                         .requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
                         // Provider payment endpoints — API key auth, not Spring Security
