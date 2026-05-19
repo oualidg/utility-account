@@ -124,6 +124,12 @@
             <version>2.2.0</version>
         </dependency>
 
+        <!-- Micrometer Prometheus (metrics export for Grafana) -->
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-registry-prometheus</artifactId>
+        </dependency>
+
         <!-- Spring Boot Test (Testing framework) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
