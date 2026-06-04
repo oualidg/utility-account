@@ -25,7 +25,6 @@ import org.springdoc.core.models.GroupedOpenApi;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.Profile;
 
 /**
  * OpenAPI/Swagger configuration for the Utility Account Service.
@@ -34,10 +33,9 @@ import org.springframework.context.annotation.Profile;
  * <ul>
  *   <li><b>Payments</b> — always visible, in all profiles. Exposes payment deposit,
  *       confirmation, and validation endpoints. Secured via {@code ApiKeyAuth}.</li>
- *   <li><b>Admin</b> — visible in {@code dev} profile only. Exposes customer, account,
+ *   <li><b>Admin</b> — visible in all profiles. Exposes customer, account,
  *       provider, reporting, user management, and authentication endpoints.
- *       Secured via {@code BearerAuth}. Hidden in {@code prod} to avoid exposing
- *       admin APIs through the internal Swagger UI.</li>
+ *       Secured via {@code BearerAuth}.</li>
  * </ul>
  *
  * <p>Two security schemes are registered:</p>
@@ -48,10 +46,7 @@ import org.springframework.context.annotation.Profile;
  *       then click Authorize and paste the token.</li>
  * </ul>
  *
- * <p>Swagger UI is intentionally not exposed through Nginx — it is only accessible
- * directly via the server's internal IP on port 8080 from the local network.</p>
- *
- * Access Swagger UI at: http://192.168.1.168:8080/swagger-ui.html
+ * Swagger UI is publicly accessible at: https://utility.oualidg.dev/swagger-ui/index.html
  *
  * @author Oualid Gharach
  */
@@ -153,15 +148,10 @@ public class OpenApiConfig {
      *   <li>/api/info            — actuator info</li>
      * </ul>
      *
-     * <p>Hidden in prod via {@code @Profile("!prod")} — admin APIs must not be
-     * discoverable via Swagger in production. Access remains enforced by Spring
-     * Security regardless of Swagger visibility.</p>
-     *
      * <p>Uses {@code BearerAuth}: login via POST /api/auth/login with
      * {@code X-Auth-Mode: bearer}, then paste the returned token into Authorize.</p>
      */
     @Bean
-    @Profile("!prod")
     public GroupedOpenApi adminGroup() {
         return GroupedOpenApi.builder()
                 .group("admin")
