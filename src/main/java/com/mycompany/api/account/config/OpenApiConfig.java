@@ -67,6 +67,14 @@ import org.springframework.context.annotation.Configuration;
 })
 public class OpenApiConfig {
 
+    private static final String[] PAYMENT_PATHS = {
+            "/api/v1/accounts/*/payments",
+            "/api/v1/customers/*/payments",
+            "/api/v1/payments/confirmation/*",
+            "/api/v1/accounts/*/validate",
+            "/api/v1/customers/*/validate"
+    };
+
     @Value("${info.app.name}")
     private String appName;
 
@@ -122,19 +130,13 @@ public class OpenApiConfig {
         return GroupedOpenApi.builder()
                 .group("payments")
                 .displayName("Payments API")
-                .pathsToMatch(
-                        "/api/v1/accounts/*/payments",
-                        "/api/v1/customers/*/payments",
-                        "/api/v1/payments/confirmation/*",
-                        "/api/v1/accounts/*/validate",
-                        "/api/v1/customers/*/validate"
-                )
+                .pathsToMatch(PAYMENT_PATHS)
                 .addOpenApiCustomizer(paymentsSecurityCustomizer())
                 .build();
     }
 
     /**
-     * Admin API group — visible in dev profile only.
+     * Admin API group — visible in all profiles.
      *
      * <p>Exposes all non-payment endpoints:</p>
      * <ul>
@@ -166,6 +168,7 @@ public class OpenApiConfig {
                         "/api/health",
                         "/api/info"
                 )
+                .pathsToExclude(PAYMENT_PATHS)
                 .addOpenApiCustomizer(adminSecurityCustomizer())
                 .build();
     }
